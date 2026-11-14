@@ -294,10 +294,8 @@ Deno.serve(async (req) => {
         const { data: person } = await db.from("people").select("id").eq("id", body.person_id).maybeSingle();
         if (!person) return json({ error: "Unknown player." }, 400);
         if (body.mode === "race") {
-          // Race day: the course must be today's (or yesterday's, for late finishers) in Colorado time
-          const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
-          const now = new Date();
-          const okDays = [day(now), day(new Date(now.getTime() - 864e5))];
+          // Race day: one fixed course, the Grand Traverse date
+          const okDays = ["2027-03-28"];
           const course = String(body.course ?? "");
           const timeMs = Math.round(Number(body.time_ms));
           if (!okDays.includes(course)) return json({ error: "That course isn't open." }, 400);

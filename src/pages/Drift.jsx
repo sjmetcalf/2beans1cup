@@ -3,9 +3,10 @@ import { Eyebrow, BeanDot } from "../ui.jsx";
 import { select, barista, loadPeople } from "../api.js";
 import { useBaristaCode } from "../hooks.js";
 import { fmtDay } from "../format.js";
+import * as audio from "../driftAudio.js";
 
 // Doppio Drift: a downhill runner. The latte-art cup skis the Elk Mountains. Endless mode chases
-// distance; Race day is one seeded course per day (Crested Butte to Aspen) against the clock.
+// distance; Race day is one fixed seeded course (race date) (Crested Butte to Aspen) against the clock.
 // Everything is drawn on one canvas, no images.
 
 const C = { crema: "#f4ede3", paper: "#fbf8f3", roast: "#2b1d14", roast2: "#4a3628", muted: "#7a6a5c", clay: "#b4683f", sage: "#5b7a6a", coffee: "#b47c52", milk: "#fbf6ee", snow: "#fffdf9" };
@@ -193,6 +194,7 @@ function drawGate(ctx, x, g, name, finish) {
 // ---------- seeded randomness, daily course ----------
 function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const hashStr = (str) => [...str].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261);
+export const RACE_DATE = "2027-03-28"; // Grand Traverse race day: one fixed course for everyone
 export const todayDenver = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(new Date());
 
 // Race day: Crested Butte to Aspen, checkpoints with cutoffs (seconds from the start)
@@ -254,7 +256,7 @@ export function Drift() {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
-  const course = todayDenver();
+  const course = RACE_DATE;
   const [mode, setMode] = useState(() => { try { return localStorage.getItem(MODE_KEY) === "race" ? "race" : "endless"; } catch { return "endless"; } });
   const modeRef = useRef(mode);
   const raceKey = `doppio.drift.race.${course}`;
@@ -292,6 +294,11 @@ export function Drift() {
     return () => { document.removeEventListener("fullscreenchange", onFsChange); document.documentElement.classList.remove("drift-lock"); };
   }, []);
 
+  const [soundOn, setSoundOn] = useState(audio.isSoundOn);
+  const [musicOn, setMusicOn] = useState(audio.isMusicOn);
+  const toggleSound = () => { audio.unlock(); const on = !soundOn; audio.setSound(on); setSoundOn(on); if (on && !musicOn) { audio.setMusic(true); setMusicOn(true); } canvasRef.current?.focus(); };
+  const toggleMusic = () => { audio.unlock(); const on = !(musicOn && soundOn); if (on && !soundOn) { audio.setSound(true); setSoundOn(true); } audio.setMusic(on); setMusicOn(on); canvasRef.current?.focus(); };
+
   const pickMode = (m) => {
     setMode(m); modeRef.current = m; setState("ready");
     try { localStorage.setItem(MODE_KEY, m); } catch { /* ignore */ }
@@ -325,21 +332,22 @@ export function Drift() {
     const cupX = () => Math.max(64, W * 0.16);
     const slopeNow = (s) => Math.min(slope0 + 0.03 * s.tier, slopeMax);
 
-    const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); };
+    const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); audio.sfx("start"); };
     const tapAction = (s) => {
-      if (s.phase === "on" || s.phase === "off") { s.taps++; s.tapFx = 0.15; return; }
+      if (s.phase === "on" || s.phase === "off") { s.taps++; s.tapFx = 0.15; audio.sfx("tap"); return; }
       if (s.phase === "climb") {
         if (s.t - (s.lastTap || 0) < 0.12) return; s.lastTap = s.t;
         const m = strideMeter(s.strideT);
-        if (m > 0.36 && m < 0.64) { s.climbV = Math.min(280, s.climbV + 95); s.strideFx = 0.35; }
-        else { s.climbV = Math.max(40, s.climbV - 35); s.slipFx = 0.45; }
+        if (m > 0.36 && m < 0.64) { s.climbV = Math.min(280, s.climbV + 95); s.strideFx = 0.35; audio.sfx("stride"); }
+        else { s.climbV = Math.max(40, s.climbV - 35); s.slipFx = 0.45; audio.sfx("slip"); }
       }
     };
     const jump = () => {
+      audio.unlock();
       const s = g();
       if (s.state !== "running") { if (s.state !== "ready" && s.t < 0.5) return; start(); return; }
       if (s.phase !== "down") { tapAction(s); return; }
-      if (s.vy === 0 && !s.onIce) { s.vy = -760; s.ducking = false; s.riding = false; }
+      if (s.vy === 0 && !s.onIce) { s.vy = -760; s.ducking = false; s.riding = false; audio.sfx("jump"); }
     };
     const releaseJump = () => { const s = g(); if (s.vy < -360) s.vy = -360; };
     const duck = (on) => {
@@ -349,6 +357,7 @@ export function Drift() {
     };
 
     const onKey = (e) => {
+      audio.unlock();
       if (e.code === "Escape" && fsRef.current) { exitFs(); return; }
       if (g().paused && ["Space", "ArrowUp", "KeyW"].includes(e.code)) { e.preventDefault(); g().paused = false; last = 0; return; }
       if (e.target instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
@@ -361,7 +370,7 @@ export function Drift() {
     };
     const zones = new Map(); // pointerId -> "jump" | "duck"
     const onDown = (e) => {
-      e.preventDefault(); canvas.focus();
+      e.preventDefault(); canvas.focus(); audio.unlock();
       const s = g();
       if (s.paused) { s.paused = false; last = 0; return; }
       const isTouch = e.pointerType === "touch" || e.pointerType === "pen";
@@ -453,6 +462,7 @@ export function Drift() {
     const spillOut = (s, n) => { for (let i = 0; i < n; i++) s.splash.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 40 + Math.random() * 200, vy: -140 - Math.random() * 240, r: 1.5 + Math.random() * 3, life: 1.2 }); };
     const end = (s, how, msg) => {
       s.state = how; s.t = 0; s.endMsg = msg;
+      audio.music(false); audio.sfx(how === "finished" ? "finish" : "over");
       if (how === "over") for (let i = 0; i < 14; i++) s.spill.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 60 + Math.random() * 220, vy: -160 - Math.random() * 260, r: 2 + Math.random() * 3.5 });
       setState(how);
       const ft = Math.floor(s.dist / 10);
@@ -471,7 +481,7 @@ export function Drift() {
       s.fill = Math.max(0, s.fill - amt); s.inv = 1.2; s.slowT = 1.6; spillOut(s, 8);
       buzz(s.fill <= 0.001 ? [40, 60, 80] : 35);
       if (s.fill <= 0.001) end(s, "over", "Spilled!");
-      else say(s, `${msg} · −${Math.round(amt * 100)}% coffee`, 1.2);
+      else { audio.sfx("hit"); say(s, `${msg} · −${Math.round(amt * 100)}% coffee`, 1.2); }
     };
 
     const step = (now) => {
@@ -482,13 +492,14 @@ export function Drift() {
       if (dt > 0 && dprCap > 1) { s.slowFrames = (s.slowFrames || 0) * 0.97 + (dt > 0.024 ? 1 : 0); if (s.slowFrames > 20) { dprCap = 1; size(); } }
       const sideways = touch && window.innerWidth > window.innerHeight && window.innerHeight < 520;
       if (sideways && s.state === "running") s.paused = true;
+      audio.music(s.state === "running" && !s.paused && !document.hidden);
       if (s.paused) { draw(s); return; }
       s.t += dt;
       if (s.state === "running") {
         s.runT += dt; if (s.mode === "race") s.raceT += dt;
         const ftPhys = s.trav / 10;
         const tier = Math.min(4, Math.floor(ftPhys / TIER_FT));
-        if (tier > s.tier) { s.tier = tier; s.tierT = 2.6; }
+        if (tier > s.tier) { s.tier = tier; s.tierT = 2.6; audio.sfx("tier"); }
         s.tierT = Math.max(0, s.tierT - dt);
         s.speed = baseSpeed(s.runT, s.tier);
         // skin climbs: clear the run-out, then skins on / stride up / skins off
@@ -501,9 +512,9 @@ export function Drift() {
           s.transT += dt;
           if (s.taps >= s.need) {
             const secs = s.transT;
-            if (s.phase === "on") { s.phase = "climb"; s.climbV = 120; s.strideT = 0; say(s, `Skins on · ${secs.toFixed(1)}s`, 1.4); }
+            if (s.phase === "on") { s.phase = "climb"; s.climbV = 120; s.strideT = 0; audio.sfx("skins"); say(s, `Skins on · ${secs.toFixed(1)}s`, 1.4); }
             else {
-              s.phase = "down"; s.nextIn = W * 0.5; s.climbN++;
+              s.phase = "down"; s.nextIn = W * 0.5; s.climbN++; audio.sfx("skins");
               if (s.mode === "endless" && secs < 1.6) reward(s, 30, 0, `Quick transition ${secs.toFixed(1)}s`); else say(s, `Skins off · ${secs.toFixed(1)}s`, 1.4);
               s.climb = s.mode === "race" ? (RACE_CLIMBS[s.climbN] ? { ...RACE_CLIMBS[s.climbN] } : null) : { start: cl.end + 1500, end: cl.end + 1500 + 250 + 25 * Math.min(4, s.tier), name: ENDLESS_PASSES[s.climbN % ENDLESS_PASSES.length] };
               if (s.nextAval < ftPhys + 300) s.nextAval = ftPhys + 300;
@@ -513,14 +524,14 @@ export function Drift() {
         if (s.phase === "climb") {
           s.strideT += dt;
           s.climbV = Math.max(55, s.climbV - 110 * dt);
-          if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = 5; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; }
+          if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = 5; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; audio.sfx("checkpoint"); }
         }
         s.summitT = Math.max(0, (s.summitT || 0) - dt);
         s.strideFx = Math.max(0, (s.strideFx || 0) - dt); s.slipFx = Math.max(0, (s.slipFx || 0) - dt); s.tapFx = Math.max(0, (s.tapFx || 0) - dt);
 
         // avalanches (from tier 1 on), never on or near a climb
         let mul = 1;
-        if (!s.aval && s.phase === "down" && !nearClimb && ftPhys > s.nextAval) s.aval = { t: 0, dur: 8.5, ballIn: 1.6, balls: 0 };
+        if (!s.aval && s.phase === "down" && !nearClimb && ftPhys > s.nextAval) { s.aval = { t: 0, dur: 8.5, ballIn: 1.6, balls: 0 }; audio.sfx("avalanche"); }
         if (s.aval) {
           const a = s.aval; a.t += dt;
           mul = a.t < 1.2 ? 1 : 1 + 0.3 * Math.min(1, (a.t - 1.2) / 1.2);
@@ -552,17 +563,18 @@ export function Drift() {
         if (s.y >= floor) {
           if (s.airStart != null) {
             const secs = s.t - s.airStart;
+            if (secs > 0.3) audio.sfx("land");
             if (s.spin) { s.spin = null; s.spins = 0; damage(s, 0.25, "Sketchy landing"); }
             else if (s.fromKicker) { // points only for kicker air
-              if (s.spins) { const names = ["", "360", "720", "1080", "1440"]; reward(s, 40 * s.spins, 0.3 * s.spins, `${names[Math.min(4, s.spins)]}!`); }
-              else if (secs > 0.55) reward(s, Math.round(secs * 60), secs * 0.4, `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`);
+              if (s.spins) { const names = ["", "360", "720", "1080", "1440"]; reward(s, 40 * s.spins, 0.3 * s.spins, `${names[Math.min(4, s.spins)]}!`); audio.sfx("trick"); }
+              else if (secs > 0.55) { reward(s, Math.round(secs * 60), secs * 0.4, `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`); audio.sfx("trick"); }
             }
             s.spins = 0; s.fromKicker = false;
           }
           s.airStart = null;
           s.y = floor; s.vy = 0; s.riding = !!kick; s.lastKick = kick || s.lastKick;
         } else if (s.airStart == null) s.airStart = s.t;
-        if (wasRiding && !kick && s.lastKick && s.y >= -s.lastKick.h - 2) { s.vy = -s.lastKick.launch - (s.speed - 360) * 0.25; s.y = -s.lastKick.h; s.riding = false; s.airStart = s.t; s.fromKicker = true; }
+        if (wasRiding && !kick && s.lastKick && s.y >= -s.lastKick.h - 2) { s.vy = -s.lastKick.launch - (s.speed - 360) * 0.25; s.y = -s.lastKick.h; s.riding = false; s.airStart = s.t; s.fromKicker = true; audio.sfx("kick"); }
         s.bonusT = Math.max(0, (s.bonusT || 0) - dt);
 
         // world scroll
@@ -586,7 +598,7 @@ export function Drift() {
         for (const o of s.obstacles) {
           if (["kicker", "ice", "well", "gate", "finish"].includes(o.kind)) continue;
           if (!overlap(box, boxOf(o))) continue;
-          if (o.kind === "bean") { o.taken = true; s.fill = Math.min(1, s.fill + 0.2); reward(s, 25, 0.2, "Espresso bean · +20% coffee"); continue; }
+          if (o.kind === "bean") { o.taken = true; s.fill = Math.min(1, s.fill + 0.2); audio.sfx("bean"); reward(s, 25, 0.2, "Espresso bean · +20% coffee"); continue; }
           if (s.inv > 0 || o.hit) continue;
           o.hit = true; damage(s, DMG[o.kind] || 0.34, { pine: "Clipped a pine", rock: "Rock!", raven: "Raven!", ball: "Snowball!", moose: "Moose!" }[o.kind]);
           if (s.state !== "running") break;
@@ -603,7 +615,7 @@ export function Drift() {
           while (s.cpNext < CHECKPOINTS.length && s.trav / 10 >= CHECKPOINTS[s.cpNext].ft) {
             const c = CHECKPOINTS[s.cpNext];
             if (raceTime > c.cutoff) { end(s, "over", `Missed the ${c.name} cutoff`); break; }
-            s.cpMsg = `${c.name} · ${raceTime.toFixed(1)}s (cutoff ${c.cutoff}s)`; s.cpT = 2.2; s.cpNext++;
+            s.cpMsg = `${c.name} · ${raceTime.toFixed(1)}s (cutoff ${c.cutoff}s)`; s.cpT = 2.2; s.cpNext++; audio.sfx("checkpoint");
           }
           if (s.state === "running" && s.trav / 10 >= RACE_FT) end(s, "finished", "Aspen!");
           s.cpT = Math.max(0, s.cpT - dt);
@@ -730,7 +742,7 @@ export function Drift() {
         ctx.font = "italic 800 26px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast;
         ctx.fillText(`${Math.floor(s.dist / 10).toLocaleString()} ft`, W - 16, 34);
       }
-      const msgY = s.mode === "race" ? 84 : 66;
+      const msgY = (s.mode === "race" ? 84 : 66) + (s.phase === "climb" ? 22 : 0); // drop below the climb line
       if (s.bonusT > 0 && s.state === "running") {
         ctx.globalAlpha = Math.min(1, s.bonusT * 2);
         ctx.font = "italic 800 17px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
@@ -752,12 +764,21 @@ export function Drift() {
           banner(s.phase === "off" && s.summitT > 1.2 ? `Summit: ${s.summit}` : label, `Tap fast  ${"●".repeat(s.taps)}${"○".repeat(Math.max(0, s.need - s.taps))}`, s.phase === "on" ? C.sage : C.clay, 1);
         } else {
           // stride meter: tap while the marker is in the green
-          const bw = Math.min(260, W - 60), bx = W / 2 - bw / 2, by = Math.max(112, H * 0.2), m = strideMeter(s.strideT); // up top, clear of thumbs
-          ctx.fillStyle = "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, 12, 6) : ctx.rect(bx, by, bw, 12); ctx.fill();
-          ctx.fillStyle = s.strideFx > 0 ? "rgba(91,122,106,0.85)" : "rgba(91,122,106,0.45)"; ctx.fillRect(bx + bw * 0.36, by, bw * 0.28, 12);
-          ctx.fillStyle = s.slipFx > 0 ? "#b0463a" : C.roast; ctx.fillRect(bx + bw * m - 2, by - 5, 4, 22);
-          ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = s.slipFx > 0 ? "#b0463a" : C.roast2;
-          ctx.fillText(s.slipFx > 0 ? "Slipped! Tap in the green" : s.strideFx > 0 ? "Good stride" : "Skin up: tap in the green", W / 2, by + 20);
+          // stride ring: a hand sweeps round once per stride; tap as it crosses a green arc (3 and 9 o'clock)
+          const r = Math.round(Math.min(64, W * 0.17)), ccx = W / 2, ccy = Math.round(H * 0.5);
+          const ang = (s.strideT / STRIDE_PERIOD) * Math.PI * 2 - Math.PI / 2, half = 0.284; // ±16° ≈ the old 0.36–0.64 window
+          const hitCol = s.strideFx > 0 ? "rgba(91,122,106,0.95)" : "rgba(91,122,106,0.55)", bad = s.slipFx > 0;
+          ctx.fillStyle = "rgba(251,248,243,0.78)"; ctx.beginPath(); ctx.arc(ccx, ccy, r + 14, 0, Math.PI * 2); ctx.fill();
+          ctx.lineWidth = 12; ctx.lineCap = "butt";
+          ctx.strokeStyle = bad ? "rgba(176,70,58,0.25)" : "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.arc(ccx, ccy, r, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = hitCol;
+          for (const c of [0, Math.PI]) { ctx.beginPath(); ctx.arc(ccx, ccy, r, c - half, c + half); ctx.stroke(); }
+          ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.strokeStyle = bad ? "#b0463a" : C.roast;
+          ctx.beginPath(); ctx.moveTo(ccx, ccy); ctx.lineTo(ccx + Math.cos(ang) * (r + 8), ccy + Math.sin(ang) * (r + 8)); ctx.stroke();
+          ctx.fillStyle = bad ? "#b0463a" : C.roast; ctx.beginPath(); ctx.arc(ccx, ccy, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.lineWidth = 1; ctx.lineCap = "butt";
+          ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = bad ? "#b0463a" : C.roast2;
+          ctx.fillText(bad ? "Slipped! Tap in the green" : s.strideFx > 0 ? "Good stride" : "Skin up: tap in the green", ccx, ccy + r + 22);
           ctx.textAlign = "right"; ctx.font = "500 12px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
           ctx.fillText(`${s.climb.name} · ${Math.max(0, Math.ceil(s.climb.end - s.trav / 10))} ft to the top`, W - 16, s.mode === "race" ? 84 : 66);
         }
@@ -808,6 +829,7 @@ export function Drift() {
       window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointercancel", onUp); canvas.removeEventListener("contextmenu", noMenu);
       document.removeEventListener("visibilitychange", onVis);
+      audio.music(false);
     };
   }, []);
 
@@ -830,7 +852,15 @@ export function Drift() {
         <div className="drift-stage" ref={stageRef}>
           <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift, ${mode === "race" ? "race day" : "endless"} mode. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
         </div>
-        {fs && <button type="button" className="drift-exit" onClick={exitFs} aria-label="Exit full screen">✕</button>}
+        <div className="drift-top">
+          <button type="button" className={`drift-btn ${musicOn && soundOn ? "" : "is-off"}`} onClick={toggleMusic} aria-pressed={musicOn && soundOn} aria-label="Music" title="Music">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" />{!(musicOn && soundOn) && <path d="M3 3l18 18" />}</svg>
+          </button>
+          {fs && <button type="button" className="drift-btn" onClick={exitFs} aria-label="Exit full screen">✕</button>}
+          <button type="button" className={`drift-btn ${soundOn ? "" : "is-off"}`} onClick={toggleSound} aria-pressed={soundOn} aria-label="Sound" title="Sound">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z" />{soundOn ? <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" /> : <path d="M22 9l-6 6M16 9l6 6" />}</svg>
+          </button>
+        </div>
         <div className="drift-rotate" role="status">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
           <p>Turn your phone upright to keep playing</p>
@@ -841,11 +871,12 @@ export function Drift() {
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
         <li><b>Spin</b> with ↓ (or the left half on a phone) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
         <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
+        <li><b>Sound:</b> music and sound effects toggle at the top of the game. On an iPhone, flip the silent switch off to hear them.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
-        <li><b>Race day</b> is the same course for everyone today: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
+        <li><b>Race day</b> is the March 28 Grand Traverse course, the same for everyone: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
       </ul>
       <p className="muted small drift-help">
-        {mode === "race" ? <>Your best today: <b>{bestRace ? `${(bestRace / 1000).toFixed(1)}s` : "no finish yet"}</b></> : <>Your best on this device: <b>{best.toLocaleString()} ft</b></>}
+        {mode === "race" ? <>Your best: <b>{bestRace ? `${(bestRace / 1000).toFixed(1)}s` : "no finish yet"}</b></> : <>Your best on this device: <b>{best.toLocaleString()} ft</b></>}
       </p>
       <Leaderboard onOverRef={onOverRef} mode={mode} course={course} />
     </section>
