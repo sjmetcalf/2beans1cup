@@ -530,3 +530,38 @@ img, svg { max-width: 100%; }
 .kind-tag span { opacity: 0.6; }
 .kind-tag.kind-off { color: var(--sage); border-color: color-mix(in srgb, var(--sage) 45%, transparent); background: color-mix(in srgb, var(--sage) 10%, transparent); }
 .kind-tag:hover { border-color: var(--clay); }
+
+/* Collapsible calendars panel */
+.upload-card { padding: 0; }
+.collapse-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; background: none; border: 0; color: var(--roast); text-align: left; cursor: pointer; border-radius: var(--radius); }
+.collapse-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.collapse-title strong { font-family: var(--display); font-size: 17px; letter-spacing: -0.02em; }
+.collapse-title .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collapse-chev { width: 22px; height: 22px; flex: none; color: var(--muted); transition: transform 0.3s var(--ease); }
+.upload-card.is-open .collapse-chev { transform: rotate(180deg); }
+.collapse-body { padding: 0 20px 20px; border-top: 1px solid var(--line); padding-top: 14px; animation: raceIn 0.3s var(--ease); }
+.upload-card > .ok-note, .upload-card > .error-note { margin: 0 20px 16px; }
+
+/* Mobile week: one row per day, no sideways scroll */
+.daybars { background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.daybars-axis { display: grid; grid-template-columns: 46px 1fr; gap: 10px; padding: 10px 14px 6px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.daybars-scale { position: relative; height: 14px; }
+.daybars-scale span { position: absolute; transform: translateX(-50%); font-size: 10px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.dayrow { display: grid; grid-template-columns: 46px 1fr; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.dayrow:last-child { border-bottom: 0; }
+.dayrow.is-today { background: color-mix(in srgb, var(--clay) 6%, transparent); }
+.dayrow.is-today .week-date { color: var(--clay); }
+.dayrow.is-past { opacity: 0.5; }
+.dayrow-date { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.dayrow-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.dayrow-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
+.dayrow-chips .allday-chip { --bean: var(--muted); }
+.allday-chip.is-race { background: var(--clay); color: var(--on-accent); border-left-color: var(--clay); }
+.lane-track { position: relative; height: 9px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.lane-track.is-off { background: repeating-linear-gradient(135deg, rgba(255,255,255,0.12) 0 4px, transparent 4px 8px); }
+.lane-track.is-unknown { opacity: 0.4; }
+.lane-busy { position: absolute; top: 0; bottom: 0; border-radius: 4px; opacity: 0.9; }
+.lane-free .lane-track { background: transparent; height: 6px; }
+.lane-freeblock { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--clay); }
+.dayrow-free { font-size: 13px; color: var(--roast-2); margin-top: 1px; }
+.dayrow-free strong { color: var(--clay); font-weight: 600; }

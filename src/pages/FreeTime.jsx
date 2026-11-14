@@ -83,6 +83,11 @@ export function Upload({ people, sources = [], onDone }) {
   const [inputKey, setInputKey] = useState(0);
   const person = people.find((p) => p.id === personId);
   const mine = sources.filter((s) => s.person_id === personId);
+  const [open, setOpen] = useState(() => people.some((p) => !sources.some((x) => x.person_id === p.id)) && sources.length === 0);
+  const summary = people.map((p) => {
+    const names = sources.filter((x) => x.person_id === p.id).map((x) => x.name);
+    return `${p.name}: ${names.length ? names.join(", ") : "none yet"}`;
+  }).join(" · ");
 
   const onFiles = async (e) => {
     setErr(null); setMsg(null);
@@ -139,9 +144,16 @@ export function Upload({ people, sources = [], onDone }) {
   };
 
   return (
-    <div className="chart-card upload-card">
+    <div className={`chart-card upload-card ${open ? "is-open" : ""}`}>
+      <button type="button" className="collapse-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="collapse-title">
+          <strong>Calendars</strong>
+          <span className="muted small">{summary}</span>
+        </span>
+        <svg className="collapse-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+      {open && (<div className="collapse-body">
       <header className="chart-card-head">
-        <h3>Add calendars</h3>
         <p>Add your work schedule and time off (or as many .ics files as you like). Days off automatically cancel out work that day. Your browser reads the files and sends only start and end times; titles and details never leave this page. Re-uploading a calendar with the same name replaces it.</p>
       </header>
 
@@ -189,8 +201,85 @@ export function Upload({ people, sources = [], onDone }) {
         ))}
       </div>
 
+      </div>)}
       {msg && <p className="ok-note">{msg}</p>}
       {err && <ErrorNote error={err} />}
+    </div>
+  );
+}
+
+function useIsNarrow(px = 700) {
+  const q = `(max-width: ${px}px)`;
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(q);
+    if (!mq) return;
+    const fn = () => setNarrow(mq.matches);
+    fn();
+    mq.addEventListener?.("change", fn);
+    return () => mq.removeEventListener?.("change", fn);
+  }, [q]);
+  return narrow;
+}
+
+// One row per day; each person gets a thin 5am–10pm bar, plus a gold "both free" bar.
+function DayBars({ byDay, ps, uploaded, eventsOn }) {
+  const span = (VIEW_END - VIEW_START) * 36e5;
+  const pct = (ms, day) => Math.max(0, Math.min(100, ((ms - atHour(day, VIEW_START)) / span) * 100));
+  const ticks = [6, 9, 12, 15, 18, 21];
+  const today = dayKey(new Date());
+  return (
+    <div className="daybars">
+      <div className="daybars-axis" aria-hidden="true">
+        <span className="daybars-gutter" />
+        <div className="daybars-scale">
+          {ticks.map((h) => (
+            <span key={h} style={{ left: `${((h - VIEW_START) / (VIEW_END - VIEW_START)) * 100}%` }}>{fmtTime(new Date(2000, 0, 1, h).getTime())}</span>
+          ))}
+        </div>
+      </div>
+      {byDay.map(({ day, timed, allDay, free, offPeople }) => {
+        const isToday = dayKey(day) === today;
+        const past = atHour(day, VIEW_END) < Date.now();
+        const chips = [
+          ...ps.filter((p) => offPeople.has(p.id)).map((p) => ({ k: `off-${p.id}`, t: `${p.name} off`, c: p.color })),
+          ...allDay.map((b, i) => { const p = ps.find((x) => x.id === b.person_id); return { k: `ad-${i}`, t: `${p?.name}: all day`, c: p?.color }; }),
+          ...eventsOn(day).map((e) => ({ k: e.id, t: e.title, race: e.kind === "race" })),
+        ];
+        return (
+          <div key={day.toISOString()} className={`dayrow ${isToday ? "is-today" : ""} ${past ? "is-past" : ""}`}>
+            <div className="dayrow-date">
+              <span className="week-dow">{day.toLocaleDateString("en-US", { weekday: "short" })}</span>
+              <span className="week-date">{day.getDate()}</span>
+            </div>
+            <div className="dayrow-main">
+              {chips.length > 0 && (
+                <div className="dayrow-chips">
+                  {chips.map((c) => <span key={c.k} className={`allday-chip ${c.race ? "is-race" : ""}`} style={c.c ? { "--bean": c.c } : undefined}>{c.t}</span>)}
+                </div>
+              )}
+              {ps.map((p) => (
+                <div key={p.id} className="lane" title={p.name}>
+                  <div className={`lane-track ${offPeople.has(p.id) ? "is-off" : ""} ${!uploaded.has(p.id) ? "is-unknown" : ""}`}>
+                    {timed.filter((b) => b.person_id === p.id).map((b, i) => {
+                      const l = pct(b.s, day), r = pct(b.e, day);
+                      return r > l ? <span key={i} className="lane-busy" style={{ left: `${l}%`, width: `${r - l}%`, background: p.color }} /> : null;
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div className="lane lane-free">
+                <div className="lane-track">
+                  {free.map(([s0, e0], i) => <span key={i} className="lane-freeblock" style={{ left: `${pct(s0, day)}%`, width: `${pct(e0, day) - pct(s0, day)}%` }} />)}
+                </div>
+              </div>
+              <p className="dayrow-free">
+                {free.length ? <>Both free <strong>{free.map(([a, b]) => `${fmtTime(a)}–${fmtTime(b)}`).join(", ")}</strong></> : <span className="muted">{past ? "Past" : "No shared window"}</span>}
+              </p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -202,11 +291,11 @@ export function FreeTime() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()).getTime());
   const [minLen, setMinLen] = useState(60);
   const [tick, setTick] = useState(0);
-  const [showUpload, setShowUpload] = useState(false);
   const from = weekStart;
   const to = weekStart + 7 * 864e5;
   const busy = useBusy(code, from, to, tick);
   const wrapRef = useRef(null);
+  const narrow = useIsNarrow();
   useEffect(() => {
     const el = wrapRef.current?.querySelector(".week-day.is-today");
     const wrap = wrapRef.current;
@@ -273,10 +362,8 @@ export function FreeTime() {
         <Segmented label="Minimum free window" value={minLen} onChange={setMinLen} options={[{ value: 60, label: "1h+" }, { value: 120, label: "2h+" }, { value: 240, label: "4h+" }]} />
       </div>
 
-      {people.data && (missing.length > 0 || showUpload) ? (
-        <div className="free-upload"><Upload people={ps} sources={sources} onDone={() => { setTick((t) => t + 1); setShowUpload(false); }} /></div>
-      ) : (
-        <button className="btn btn-ghost btn-sm free-upload-toggle" onClick={() => setShowUpload(true)}>Manage calendars</button>
+      {people.data && busy.data && (
+        <div className="free-upload"><Upload key={sources.length ? "has" : "none"} people={ps} sources={sources} onDone={() => setTick((t) => t + 1)} /></div>
       )}
 
       <div className="legend free-legend">
@@ -285,7 +372,9 @@ export function FreeTime() {
       </div>
 
       {busy.error && <ErrorNote error={busy.error} />}
-      {busy.loading && !busy.data ? <Loading /> : (
+      {busy.loading && !busy.data ? <Loading /> : narrow ? (
+        <DayBars byDay={byDay} ps={ps} uploaded={uploaded} eventsOn={eventsOn} />
+      ) : (
         <div className="week-wrap" ref={wrapRef}>
           <div className="week" style={{ "--hour": `${HOUR_PX}px`, "--hours": hours.length }}>
             <div className="week-gutter">
