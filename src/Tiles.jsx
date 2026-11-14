@@ -43,8 +43,6 @@ export function Gauge({ parts, target, size = 132, stroke = 10, children }) {
             offset += len;
             return el;
           })}
- />
-          )}
         </g>
       </svg>
       <div className="gauge-center">{children}</div>

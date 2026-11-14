@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useHashRoute, useBaristaCode } from "./hooks.js";
-import { Badge } from "./Badge.jsx";
 import { Grain } from "./bits.jsx";
 import { Home } from "./pages/Home.jsx";
 import { PourLog } from "./pages/PourLog.jsx";
@@ -111,7 +110,6 @@ export function App() {
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <Badge size={232} className="footer-badge" />
           <p className="muted footer-meta">Ski · Run · Bike · Espresso</p>
         </div>
       </footer>

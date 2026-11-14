@@ -3,6 +3,7 @@ import { BlurText, CountUp, SpotlightCard, Marquee, ShinyText } from "../bits.js
 import { useData } from "../hooks.js";
 import { loadPeople, loadEvents, loadActivities } from "../api.js";
 import { daysUntil, fmtDay, fmtMiles, fmtFeet, fmtDuration, fmtWhen, miles, feet, startOfWeek, SPORTS, activityDay, dayKey } from "../format.js";
+import { Badge } from "../Badge.jsx";
 import { SectionHead, BeanDot, SportTag, Empty, Loading } from "../ui.jsx";
 
 const LEGS = [
@@ -227,6 +228,7 @@ export function Home() {
           <div className="hero-actions">
             <a className="btn btn-dark" href="#/side-by-side">Compare our pours</a>
             <a className="btn btn-ghost" href="#/menu">See the menu</a>
+            <Badge size={128} className="hero-badge" />
           </div>
         </div>
         <div className="hero-panel">
