@@ -9,7 +9,7 @@ const write = (k, on) => { try { localStorage.setItem(k, on ? "on" : "off"); } c
 
 let ctx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
 let soundOn = read(SOUND_KEY), musicOn = read(MUSIC_KEY);
-let playing = false, timer = null, step = 0, nextT = 0;
+let playing = false, timer = null, step = 0, nextT = 0, startT = 0;
 
 const hz = (m) => 440 * 2 ** ((m - 69) / 12);
 
@@ -136,11 +136,18 @@ export function music(on) {
   if (want === playing) return;
   playing = !!want;
   if (playing) {
-    step = 0; nextT = ctx.currentTime + 0.06;
+    step = 0; nextT = ctx.currentTime + 0.06; startT = nextT;
     tick(); timer = setInterval(tick, 40);
   } else {
     clearInterval(timer); timer = null;
   }
+}
+
+export const BEAT = STEP * 8; // one quarter note
+// Seconds since the theme's first downbeat, as heard (output latency taken off), or null when it isn't playing.
+export function musicTime() {
+  if (!playing || !ctx) return null;
+  return ctx.currentTime - startT - (ctx.outputLatency || ctx.baseLatency || 0);
 }
 
 export const isSoundOn = () => soundOn;

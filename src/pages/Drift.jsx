@@ -211,7 +211,7 @@ const RACE_CLIMBS = [{ start: 1800, end: 2100, name: "Star Pass" }, { start: 260
 const ENDLESS_PASSES = ["Star Pass", "Taylor Pass", "Pearl Pass", "Copper Pass", "East Maroon Pass", "Triangle Pass", "Conundrum Pass", "Electric Pass"];
 const CLIMB_REF_V = 190, TRANSITION_REF = 1.4; // a decent pace on the skin track, used for cutoffs
 const CLIMB_SLOPE = 0.18;
-const STRIDE_PERIOD = 1.2; // seconds per swing
+const STRIDE_PERIOD = 1.2; // seconds per sweep = two beats of the theme (quarter = 100 bpm)
 const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / STRIDE_PERIOD) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
 const TIER_FT = 1000;
 const baseSpeed = (runT, tier) => Math.min(860, 360 + 9 * runT) + 45 * tier;
@@ -333,10 +333,13 @@ export function Drift() {
     const slopeNow = (s) => Math.min(slope0 + 0.03 * s.tier, slopeMax);
 
     const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); audio.sfx("start"); };
+    // with the music on, the stride ring rides the theme's clock: every green window is centred on a beat
+    const syncStride = (s) => { const mt = audio.musicTime(); if (mt != null && mt > -1) s.strideT = mt + STRIDE_PERIOD / 4; };
     const tapAction = (s) => {
       if (s.phase === "on" || s.phase === "off") { s.taps++; s.tapFx = 0.15; audio.sfx("tap"); return; }
       if (s.phase === "climb") {
         if (s.t - (s.lastTap || 0) < 0.12) return; s.lastTap = s.t;
+        syncStride(s);
         const m = strideMeter(s.strideT);
         if (m > 0.36 && m < 0.64) { s.climbV = Math.min(280, s.climbV + 95); s.strideFx = 0.35; audio.sfx("stride"); }
         else { s.climbV = Math.max(40, s.climbV - 35); s.slipFx = 0.45; audio.sfx("slip"); }
@@ -522,7 +525,7 @@ export function Drift() {
           }
         }
         if (s.phase === "climb") {
-          s.strideT += dt;
+          s.strideT += dt; syncStride(s);
           s.climbV = Math.max(55, s.climbV - 110 * dt);
           if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = 5; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; audio.sfx("checkpoint"); }
         }
