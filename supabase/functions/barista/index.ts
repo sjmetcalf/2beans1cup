@@ -291,11 +291,24 @@ Deno.serve(async (req) => {
       }
 
       case "drift.score": {
-        const score = Math.floor(Number(body.score));
-        if (!Number.isFinite(score) || score < 1 || score > 1000000) return json({ error: "Bad score." }, 400);
         const { data: person } = await db.from("people").select("id").eq("id", body.person_id).maybeSingle();
         if (!person) return json({ error: "Unknown player." }, 400);
-        const { error } = await db.from("drift_scores").insert({ person_id: person.id, score });
+        if (body.mode === "race") {
+          // Race day: the course must be today's (or yesterday's, for late finishers) in Colorado time
+          const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
+          const now = new Date();
+          const okDays = [day(now), day(new Date(now.getTime() - 864e5))];
+          const course = String(body.course ?? "");
+          const timeMs = Math.round(Number(body.time_ms));
+          if (!okDays.includes(course)) return json({ error: "That course isn't open." }, 400);
+          if (!Number.isFinite(timeMs) || timeMs < 15000 || timeMs > 900000) return json({ error: "Bad time." }, 400);
+          const { error } = await db.from("drift_scores").insert({ person_id: person.id, score: 4000, mode: "race", course, time_ms: timeMs });
+          if (error) throw error;
+          return json({ ok: true });
+        }
+        const score = Math.floor(Number(body.score));
+        if (!Number.isFinite(score) || score < 1 || score > 1000000) return json({ error: "Bad score." }, 400);
+        const { error } = await db.from("drift_scores").insert({ person_id: person.id, score, mode: "endless" });
         if (error) throw error;
         return json({ ok: true });
       }

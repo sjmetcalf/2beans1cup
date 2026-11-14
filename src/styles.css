@@ -711,3 +711,11 @@ img, svg { max-width: 100%; }
 .drift-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drift-runs b { font-weight: 600; }
 @media (max-width: 420px) { .drift-runs li { grid-template-columns: 22px auto 1fr auto; } .drift-runs li > .muted { display: none; } }
+
+.drift-modes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.drift-modes .chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--paper); font-size: 14px; font-weight: 600; cursor: pointer; }
+.drift-modes .chip.is-on { background: var(--roast); color: var(--on-accent); border-color: var(--roast); }
+.drift-rules { margin: 14px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.drift-rules b { color: var(--roast-2); }
+.show-narrow { display: none; }
+@media (max-width: 520px) { .show-narrow { display: inline; } }
