@@ -677,3 +677,6 @@ img, svg { max-width: 100%; }
   .hero-title.is-in .blur-word { transform: none; }
 }
 @media (max-width: 520px) { .hide-narrow { display: none; } }
+
+/* Optical left edge for the italic hero: "T" carries extra side space, so pull those lines in to sit flush with "N" */
+.hero-title .blur-line[data-first="T"] { margin-left: -0.055em; }

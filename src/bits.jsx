@@ -11,7 +11,7 @@ export function BlurText({ text, as: Tag = "h1", className = "", delay = 70, sta
   return (
     <Tag ref={ref} className={`blur-text ${inView ? "is-in" : ""} ${className}`} aria-label={text.replace(/\n/g, " ")}>
       {lines.map((words, li) => (
-        <span key={li} className={lines.length > 1 ? "blur-line" : undefined}>
+        <span key={li} className={lines.length > 1 ? "blur-line" : undefined} data-first={lines.length > 1 ? words[0]?.[0] : undefined}>
           {words.map((w, i) => (
             <Fragment key={i}>
               <span aria-hidden="true" className="blur-word" style={{ transitionDelay: `${start + n++ * delay}ms` }}>{w}</span>
