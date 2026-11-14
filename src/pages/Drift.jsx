@@ -752,7 +752,7 @@ export function Drift() {
           banner(s.phase === "off" && s.summitT > 1.2 ? `Summit: ${s.summit}` : label, `Tap fast  ${"●".repeat(s.taps)}${"○".repeat(Math.max(0, s.need - s.taps))}`, s.phase === "on" ? C.sage : C.clay, 1);
         } else {
           // stride meter: tap while the marker is in the green
-          const bw = Math.min(260, W - 60), bx = W / 2 - bw / 2, by = H - 58, m = strideMeter(s.strideT);
+          const bw = Math.min(260, W - 60), bx = W / 2 - bw / 2, by = Math.max(112, H * 0.2), m = strideMeter(s.strideT); // up top, clear of thumbs
           ctx.fillStyle = "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, 12, 6) : ctx.rect(bx, by, bw, 12); ctx.fill();
           ctx.fillStyle = s.strideFx > 0 ? "rgba(91,122,106,0.85)" : "rgba(91,122,106,0.45)"; ctx.fillRect(bx + bw * 0.36, by, bw * 0.28, 12);
           ctx.fillStyle = s.slipFx > 0 ? "#b0463a" : C.roast; ctx.fillRect(bx + bw * m - 2, by - 5, 4, 22);
