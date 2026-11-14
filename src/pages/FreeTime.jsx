@@ -52,7 +52,7 @@ function useBusy(code, from, to, tick) {
   return state;
 }
 
-function Upload({ people, onDone }) {
+export function Upload({ people, onDone, uploads = [] }) {
   const [personId, setPersonId] = useState(people[0]?.id);
   const [parsed, setParsed] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -92,6 +92,19 @@ function Upload({ people, onDone }) {
         <h3>Add a work calendar</h3>
         <p>Your browser reads the .ics file and sends only busy start and end times. Titles, attendees, locations and notes never leave this page. A new upload replaces that person's previous one.</p>
       </header>
+      {people.length > 0 && (
+        <ul className="upload-status">
+          {people.map((p) => {
+            const u = uploads.find((x) => x.person_id === p.id);
+            return (
+              <li key={p.id}>
+                <span className="bean-dot" style={{ background: p.color, width: 9, height: 9 }} /> <strong>{p.name}</strong>{" "}
+                <span className="muted">{u ? `${u.block_count} busy blocks · uploaded ${new Date(u.uploaded_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "no calendar yet"}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <div className="upload-row">
         <Segmented label="Whose calendar" value={personId} onChange={setPersonId} options={people.map((p) => ({ value: p.id, label: p.name }))} />
         <label className="file-btn">
@@ -125,6 +138,7 @@ export function FreeTime() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()).getTime());
   const [minLen, setMinLen] = useState(60);
   const [tick, setTick] = useState(0);
+  const [showUpload, setShowUpload] = useState(false);
   const from = weekStart;
   const to = weekStart + 7 * 864e5;
   const busy = useBusy(code, from, to, tick);
@@ -190,6 +204,12 @@ export function FreeTime() {
         <Segmented label="Minimum free window" value={minLen} onChange={setMinLen} options={[{ value: 60, label: "1h+" }, { value: 120, label: "2h+" }, { value: 240, label: "4h+" }]} />
       </div>
 
+      {people.data && (missing.length > 0 || showUpload) ? (
+        <div className="free-upload"><Upload people={ps} uploads={busy.data?.uploads || []} onDone={() => { setTick((t) => t + 1); setShowUpload(false); }} /></div>
+      ) : (
+        <button className="btn btn-ghost btn-sm free-upload-toggle" onClick={() => setShowUpload(true)}>Upload a new calendar</button>
+      )}
+
       <div className="legend free-legend">
         {ps.map((p) => <span key={p.id}><BeanDot person={p} size={10} /> {p.name} busy{!uploaded.has(p.id) ? " (no calendar yet)" : ""}</span>)}
         <span><span className="free-swatch" /> Both free</span>
@@ -244,7 +264,7 @@ export function FreeTime() {
         </div>
       )}
 
-      <div className="menu-columns">
+      <div className="free-list">
         <div>
           <h3 className="col-title">Free together this week</h3>
           {missing.length > 0 && <p className="need-code">{missing.map((p) => p.name).join(" and ")} {missing.length === 1 ? "hasn't" : "haven't"} uploaded a calendar yet, so these windows only count {ps.filter((p) => uploaded.has(p.id)).map((p) => p.name).join(" and ") || "nobody"}.</p>}
@@ -260,9 +280,7 @@ export function FreeTime() {
           </ul>
           <p className="muted small">All-day events (PTO, holidays) are shown but don't block time. Free windows only count {VIEW_START}am to {VIEW_END - 12}pm.</p>
         </div>
-        <div>
-          {people.data && <Upload people={ps} onDone={() => setTick((t) => t + 1)} />}
-        </div>
+
       </div>
     </section>
   );

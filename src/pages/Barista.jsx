@@ -3,6 +3,8 @@ import { useData, useBaristaCode } from "../hooks.js";
 import { loadPeople, barista, setCode, invalidate } from "../api.js";
 import { Loading, ErrorNote } from "../ui.jsx";
 import { BlurText } from "../bits.jsx";
+import { Upload } from "./FreeTime.jsx";
+import { useEffect } from "react";
 
 function CodeForm() {
   const [value, setValue] = useState("");
@@ -98,6 +100,25 @@ function PersonCard({ person }) {
   );
 }
 
+function Calendars({ people }) {
+  const [uploads, setUploads] = useState([]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    barista("busy.list", { from: new Date().toISOString(), to: new Date(Date.now() + 864e5).toISOString() })
+      .then((d) => alive && setUploads(d.uploads || []))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [tick]);
+  return (
+    <div className="barista-calendars">
+      <h2 className="col-title">Work calendars</h2>
+      <p className="muted small">Private: only visible behind the bar. See when you're both free on <a href="#/free-time">Free Time</a>.</p>
+      <Upload people={people} uploads={uploads} onDone={() => setTick((t) => t + 1)} />
+    </div>
+  );
+}
+
 export function Barista() {
   const code = useBaristaCode();
   const people = useData(loadPeople);
@@ -116,6 +137,7 @@ export function Barista() {
               {people.data.map((p) => <PersonCard key={p.id} person={p} />)}
             </div>
           )}
+          {people.data && <Calendars people={people.data} />}
         </>
       )}
     </section>

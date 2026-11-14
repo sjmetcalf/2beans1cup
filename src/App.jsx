@@ -41,6 +41,18 @@ const PAGES = {
 
 function Nav({ route }) {
   const listRef = useRef(null);
+  const headerRef = useRef(null);
+  // Expose the header height so sticky table headers sit right under it
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--nav-h", `${el.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", set);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", set); };
+  }, []);
   const [pill, setPill] = useState(null);
   const code = useBaristaCode();
   const items = [...NAV, ...(code ? PRIVATE_NAV : [])];
@@ -60,7 +72,7 @@ function Nav({ route }) {
   }, [route, code]);
 
   return (
-    <header className="nav">
+    <header className="nav" ref={headerRef}>
       <a href="#/" className="nav-brand" aria-label="2beans1cup home">
         <img className="nav-mark" src="/assets/beans-mark.webp" alt="" width="240" height="198" />
         <span className="wordmark">2beans<span className="wordmark-1">1</span>cup</span>

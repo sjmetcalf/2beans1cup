@@ -3,7 +3,8 @@ import { useData, useInView } from "../hooks.js";
 import { loadPeople, loadActivities } from "../api.js";
 import { miles, feet, startOfWeek, SPORTS } from "../format.js";
 import { Segmented, Loading, Empty, ErrorNote, BeanDot } from "../ui.jsx";
-import { BlurText, CountUp } from "../bits.jsx";
+import { BlurText } from "../bits.jsx";
+import { Positions, PosFirst, pctChange, fmtPct, toneFor } from "../Positions.jsx";
 
 const METRICS = [
   { key: "dist", label: "Miles", unit: "mi", get: (a) => miles(a.distance_m || 0), fmt: (v) => v.toFixed(1) },
@@ -113,40 +114,33 @@ function TrendChart({ people, acts, weeks, metric }) {
   );
 }
 
-function Meter({ person, value, max, fmt }) {
-  const [ref, inView] = useInView({ threshold: 0.3 });
-  const pct = max > 0 ? (value / max) * 100 : 0;
-  return (
-    <div className="meter-row" ref={ref}>
-      <BeanDot person={person} size={8} />
-      <div className="meter" aria-hidden="true">
-        <span style={{ width: inView ? `${pct}%` : 0, background: `linear-gradient(90deg, ${person.color}, ${tint(person.color)})` }} />
-      </div>
-      <strong>{fmt(value)}</strong>
-    </div>
-  );
-}
+const POS_COLUMNS = [
+  { key: "dist", label: "Miles", fmt: (v) => v.toFixed(1) },
+  { key: "distChg", label: "Change", sub: "Miles", fmt: fmtPct, tone: toneFor },
+  { key: "vert", label: "Vert ft", fmt: (v) => Math.round(v).toLocaleString() },
+  { key: "vertChg", label: "Change", sub: "Vert", fmt: fmtPct, tone: toneFor },
+  { key: "time", label: "Hours", fmt: (v) => v.toFixed(1) },
+  { key: "timeChg", label: "Change", sub: "Hours", fmt: fmtPct, tone: toneFor },
+  { key: "count", label: "Pours", fmt: (v) => Math.round(v).toString() },
+];
 
-function SportCard({ sport, people, list }) {
-  return (
-    <div className="chart-card sport-card">
-      <header className="chart-card-head">
-        <h3>{SPORTS[sport].label}</h3>
-        <p>{list.length} {list.length === 1 ? "pour" : "pours"} between us</p>
-      </header>
-      {METRICS.filter((m) => m.key !== "count").map((m) => {
-        const values = people.map((p) => sum(list.filter((a) => a.person_id === p.id), m.get));
-        const max = Math.max(...values);
-        return (
-          <div key={m.key} className="meter-group">
-            <span className="meter-label">{m.label}{m.unit ? ` (${m.unit})` : ""}</span>
-            {people.map((p, i) => <Meter key={p.id} person={p} value={values[i]} max={max} fmt={m.fmt} />)}
-          </div>
-        );
-      })}
-    </div>
-  );
+function stats(list) {
+  return {
+    dist: sum(list, METRICS[0].get),
+    vert: sum(list, METRICS[1].get),
+    time: sum(list, METRICS[2].get),
+    count: list.length,
+  };
 }
+function withChange(now, before) {
+  return {
+    ...now,
+    distChg: pctChange(now.dist, before.dist),
+    vertChg: pctChange(now.vert, before.vert),
+    timeChg: pctChange(now.time, before.time),
+  };
+}
+const signed = (fmt) => (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v));
 
 export function SideBySide() {
   const people = useData(loadPeople);
@@ -159,7 +153,46 @@ export function SideBySide() {
     return (acts.data || []).filter((a) => new Date(a.start_time).getTime() >= since);
   }, [acts.data, days]);
 
+  const previous = useMemo(() => {
+    const end = Date.now() - days * 864e5;
+    const start = end - days * 864e5;
+    return (acts.data || []).filter((a) => { const t = new Date(a.start_time).getTime(); return t >= start && t < end; });
+  }, [acts.data, days]);
+
   const ps = people.data || [];
+  const periodName = days === 365 ? "year" : `${days} days`;
+  const posRows = [];
+  for (const sport of ["ski", "run", "bike", "other"]) {
+    for (const p of ps) {
+      const now = filtered.filter((a) => a.sport === sport && a.person_id === p.id);
+      const before = previous.filter((a) => a.sport === sport && a.person_id === p.id);
+      if (!now.length && !before.length) continue;
+      posRows.push({
+        id: `${sport}-${p.id}`,
+        first: <PosFirst dot={p.color} pill={SPORTS[sport].label.toUpperCase()} pillColor={p.color} title={p.name} />,
+        values: withChange(stats(now), stats(before)),
+      });
+    }
+  }
+  const totalsRows = ps.map((p) => ({
+    id: `total-${p.id}`,
+    first: <span className="pos-person"><BeanDot person={p} size={10} /> {p.name}</span>,
+    values: withChange(stats(filtered.filter((a) => a.person_id === p.id)), stats(previous.filter((a) => a.person_id === p.id))),
+  }));
+  const summaries = [{ label: "Total", rows: totalsRows }];
+  if (ps.length === 2) {
+    const [a, b] = totalsRows.map((r) => r.values);
+    summaries.push({
+      label: "Gap",
+      rows: [{
+        id: "gap",
+        first: <span className="pos-person muted">{ps[0].name} vs {ps[1].name}</span>,
+        values: { dist: a.dist - b.dist, vert: a.vert - b.vert, time: a.time - b.time, count: a.count - b.count },
+      }],
+    });
+  }
+  const gapColumns = POS_COLUMNS.map((c) => (["dist", "vert", "time", "count"].includes(c.key) ? { ...c, fmt: (v, row) => (row && row.distChg === undefined ? signed(c.fmt)(v) : c.fmt(v)) } : c));
+
   const weeks = days <= 30 ? 6 : days <= 90 ? 13 : 26;
   const m = METRICS.find((x) => x.key === metric);
 
@@ -167,7 +200,7 @@ export function SideBySide() {
     <section className="section section-first">
       <p className="eyebrow">Side by Side</p>
       <BlurText as="h1" text="Same beans, different roasts." className="page-title" />
-      <p className="lede">How the two of us stack up by sport. Meters are scaled to whoever did more.</p>
+      <p className="lede">How the two of us stack up by sport, and how this period compares with the last.</p>
 
       <div className="toolbar">
         <Segmented label="Period" value={days} onChange={setDays} options={[{ value: 7, label: "7 days" }, { value: 30, label: "30 days" }, { value: 90, label: "90 days" }, { value: 365, label: "Year" }]} />
@@ -181,26 +214,14 @@ export function SideBySide() {
         <Empty title="No pours in this window.">Pick a longer period, or connect Garmin on the <a href="#/barista">Barista</a> page.</Empty>
       ) : (
         <>
-          <div className="totals-grid">
-            {ps.map((p) => {
-              const mine = filtered.filter((a) => a.person_id === p.id);
-              return (
-                <div key={p.id} className="chart-card">
-                  <header className="chart-card-head">
-                    <h3><BeanDot person={p} size={10} /> {p.name}</h3>
-                    <p>{mine.length ? `${mine.length} ${mine.length === 1 ? "pour" : "pours"} in the last ${days === 365 ? "year" : `${days} days`}` : "Nothing logged in this window."}</p>
-                  </header>
-                  <div className="stat-row">
-                    {METRICS.filter((x) => x.key !== "count").map((x) => (
-                      <div key={x.key}>
-                        <span>{x.label}</span>
-                        <strong><CountUp to={sum(mine, x.get)} format={x.fmt} />{x.unit && <small> {x.unit}</small>}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="pos-section">
+            <div className="chart-card-head chart-card-head-row pos-section-head">
+              <div>
+                <h3>By sport</h3>
+                <p>Last {periodName}, with change vs the {periodName} before.</p>
+              </div>
+            </div>
+            <Positions label="Training by sport" firstLabel="Sport" columns={gapColumns} rows={posRows} summaries={summaries} firstWidth={150} colWidth={88} />
           </div>
 
           <div className="chart-card trend-card">
@@ -215,12 +236,7 @@ export function SideBySide() {
             <p className="chart-caption">Dashed line = our average week.</p>
           </div>
 
-          <div className="sport-grid">
-            {["ski", "run", "bike", "other"].map((sport) => {
-              const list = filtered.filter((a) => a.sport === sport);
-              return list.length ? <SportCard key={sport} sport={sport} people={ps} list={list} /> : null;
-            })}
-          </div>
+
         </>
       )}
     </section>

@@ -25,13 +25,11 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; overflow-x: hidden; }
-@supports (overflow: clip) { html, body { overflow-x: clip; } }
+/* Lock sideways scrolling on the root only, so the page (not body) stays the scroller and sticky headers keep working */
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; overflow-x: hidden; overscroll-behavior-x: none; }
+@supports (overflow: clip) { html { overflow-x: clip; } }
 body {
   margin: 0;
-  overflow-x: hidden;
-  width: 100%;
-  overscroll-behavior-x: none;
   background: var(--crema);
   color: var(--roast);
   font-family: var(--sans);
@@ -108,10 +106,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav-account-dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: #5fae6e; box-shadow: 0 0 0 2px var(--milk); }
   .nav-scroller { grid-column: 1 / -1; }
   .nav-links {
-    display: flex; gap: 0; padding: 0 clamp(4px, 2vw, 24px); background: transparent; border: 0; border-radius: 0;
+    display: flex; justify-content: space-between; gap: 0; padding: 0 clamp(20px, 5vw, 40px); background: transparent; border: 0; border-radius: 0;
   }
   .nav-links a {
-    flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 2px 13px; border-radius: 0;
+    flex: none; text-align: center; padding: 12px 0 13px; border-radius: 0;
     font-size: 15px; font-weight: 500; color: var(--muted); background: none; border: 0;
   }
   .nav-links a.is-active { color: var(--roast); font-weight: 600; background: none; }
@@ -442,3 +440,59 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .color-field input { width: 64px; }
 img, svg { max-width: 100%; }
 .menu-title { min-width: 0; overflow-wrap: anywhere; }
+
+/* Positions table (Fidelity-style: frozen first column, swipeable numbers, sticky header) */
+.pos-section { margin-bottom: 16px; }
+.pos-section-head { margin-bottom: 12px; }
+.positions { background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: clip; }
+.pos-grid { display: grid; grid-template-columns: var(--pos-cols); min-width: var(--pos-min); width: 100%; }
+.pos-head { position: sticky; top: var(--nav-h, 0px); z-index: 6; overflow-x: hidden; background: var(--paper); border-bottom: 1px solid var(--line-strong); border-radius: var(--radius) var(--radius) 0 0; }
+.pos-body { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.pos-body::-webkit-scrollbar { display: none; }
+.pos-inner { width: max-content; min-width: 100%; }
+.pos-th { display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; text-align: right; padding: 12px 14px 10px; font-size: 12px; font-weight: 600; color: var(--roast-2); line-height: 1.2; }
+.pos-th.is-left { align-items: flex-start; text-align: left; }
+.pos-th-sub { font-size: 11px; font-weight: 500; color: var(--muted); }
+.pos-head .pos-first { align-items: flex-start; justify-content: flex-end; text-align: left; background: var(--paper); }
+.pos-first { position: sticky; left: 0; z-index: 2; background: var(--milk); padding: 10px 12px 10px 14px; min-width: 0; display: flex; align-items: center; transition: box-shadow 0.2s; }
+.positions.is-scrolled .pos-first { box-shadow: 8px 0 10px -8px rgba(43, 29, 20, 0.25); }
+.pos-row { border-bottom: 1px solid var(--line); }
+.pos-row:hover, .pos-row:hover .pos-first { background: var(--paper); }
+.pos-cell { display: flex; align-items: center; justify-content: flex-end; padding: 10px 14px; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--roast); }
+.pos-cell.is-left { justify-content: flex-start; }
+.pos-cell.is-up { color: #3f7d4e; }
+.pos-cell.is-down { color: #b0463a; }
+
+.pos-id { display: flex; align-items: center; gap: 9px; min-width: 0; width: 100%; }
+.pos-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--milk), 0 0 0 3px var(--line); }
+.pos-id-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pos-id-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pos-pill {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; flex: none;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--pill, var(--roast)) 14%, var(--milk));
+  border: 1px solid color-mix(in srgb, var(--pill, var(--roast)) 40%, transparent);
+}
+.pos-pill-dark { background: var(--roast); color: var(--milk); border-color: var(--roast); }
+.pos-meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-title { font-size: 13px; color: var(--roast-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-person { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-summary { background: var(--paper); border-top: 1px solid var(--line-strong); }
+.pos-summary .pos-first, .pos-summary .pos-row:hover .pos-first { background: var(--paper); }
+.pos-summary-label { position: sticky; left: 0; width: max-content; padding: 14px 14px 4px; }
+.pos-summary-row { border-bottom: 0; }
+.pos-summary-row .pos-cell { font-weight: 600; }
+.pos-summary:last-child .pos-summary-row:last-child { padding-bottom: 6px; }
+@media (max-width: 700px) {
+  .positions { margin: 0 calc(-1 * clamp(20px, 5vw, 40px)); border-radius: 0; border-left: 0; border-right: 0; }
+  .pos-head { border-radius: 0; }
+  .pos-cell { font-size: 14px; padding: 10px 12px; }
+}
+
+.section-first > .lede { margin-bottom: 28px; }
+.free-upload { margin-bottom: 20px; }
+.free-upload-toggle { margin-bottom: 16px; }
+.free-list { margin-top: 40px; max-width: 720px; }
+.barista-calendars { margin-top: 40px; max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+.upload-status { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.upload-status li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
