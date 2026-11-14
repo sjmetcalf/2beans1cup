@@ -1,7 +1,7 @@
 import { RING } from "./badgeRing.js";
 
 // The 2beans1cup badge: lettering ring (slowly turns, like a stamp being pressed) + the beans.
-export function Badge({ size = 320, spin = true, tone = "roast", className = "" }) {
+export function Badge({ size = 320, spin = true, tone = "cream", className = "" }) {
   const art = tone === "cream" ? "/assets/beans-cream.webp" : "/assets/beans-roast.webp";
   // Illustration box from logo/build_badge.py: 590 wide, aspect 383:315
   const w = 590;

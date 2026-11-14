@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { BlurText, CountUp, SpotlightCard, Marquee, ShinyText } from "../bits.jsx";
 import { useData } from "../hooks.js";
 import { loadPeople, loadEvents, loadActivities } from "../api.js";
@@ -5,7 +6,7 @@ import { daysUntil, fmtDay, fmtMiles, fmtFeet, fmtDuration, fmtWhen, miles, feet
 import { SectionHead, BeanDot, SportTag, Empty, Loading } from "../ui.jsx";
 
 const LEGS = [
-  { sport: "ski", title: "The Ski", route: "Crested Butte → Aspen", detail: "Overnight backcountry ski race over the Elk Mountains, in teams of two.", date: null, note: "Late March · date TBA" },
+  { sport: "ski", title: "The Ski", route: "Crested Butte → Aspen", detail: "Overnight backcountry ski race over the Elk Mountains, in teams of two.", date: "2027-03-28" },
   { sport: "run", title: "The Run", route: "Crested Butte → Aspen", detail: "Point-to-point mountain ultra on the ski route.", date: "2027-09-04" },
   { sport: "bike", title: "The Bike", route: "Aspen → Crested Butte", detail: "The next morning, ride it all the way back.", date: "2027-09-05" },
 ];
@@ -21,15 +22,54 @@ function relDay(a) {
   return fmtWhen(a);
 }
 
-function nextRace(events) {
-  const races = (events || []).filter((e) => e.kind === "race" && daysUntil(e.starts_on) >= 0).sort((a, b) => a.starts_on.localeCompare(b.starts_on));
-  if (races[0]) return { title: races[0].title.split(":")[0].replace(/^GT /, "The "), date: races[0].starts_on, sport: races[0].sport };
-  const leg = LEGS.find((l) => l.date && daysUntil(l.date) >= 0);
-  return leg ? { title: leg.title, date: leg.date, sport: leg.sport } : null;
+function RaceCountdown() {
+  const races = LEGS.filter((l) => l.date && daysUntil(l.date) >= 0);
+  const [i, setI] = useState(0);
+  const start = useRef(null);
+  if (!races.length) return null;
+  const idx = Math.min(i, races.length - 1);
+  const race = races[idx];
+  const go = (n) => setI((cur) => (cur + n + races.length) % races.length);
+  const onDown = (e) => { start.current = e.clientX; };
+  const onUp = (e) => {
+    if (start.current == null) return;
+    const dx = e.clientX - start.current;
+    start.current = null;
+    if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+  };
+  return (
+    <div className="today-race" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={() => { start.current = null; }}
+      onKeyDown={(e) => { if (e.key === "ArrowRight") go(1); if (e.key === "ArrowLeft") go(-1); }}
+      role="group" aria-roledescription="carousel" aria-label="Race countdowns">
+      <div className="today-race-body" key={race.sport} aria-live="polite">
+        <CountUp to={daysUntil(race.date)} className="today-big" duration={900} />
+        <div className="today-race-text">
+          <p className="today-race-title">days to {race.title}</p>
+          <p className="muted small">{race.route} · {fmtDay(race.date, { month: "short", day: "numeric", year: "numeric" })}</p>
+        </div>
+      </div>
+      {races.length > 1 && (
+        <div className="today-race-nav">
+          <button className="chev" onClick={() => go(-1)} aria-label="Previous race">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <div className="race-dots" role="tablist">
+            {races.map((r, n) => (
+              <button key={r.sport} role="tab" aria-selected={n === idx} aria-label={r.title} className={`race-dot ${n === idx ? "is-on" : ""}`} onClick={() => setI(n)}>
+                <span>{r.sport}</span>
+              </button>
+            ))}
+          </div>
+          <button className="chev" onClick={() => go(1)} aria-label="Next race">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function TodayPanel({ people, acts, events }) {
-  const race = nextRace(events);
+function TodayPanel({ people, acts }) {
   const weekStart = startOfWeek(new Date()).getTime();
   const week = acts.filter((a) => new Date(a.start_time).getTime() >= weekStart);
   const latest = acts[0];
@@ -43,15 +83,7 @@ function TodayPanel({ people, acts, events }) {
         <p className="today-date">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
       </div>
 
-      {race && (
-        <div className="today-race">
-          <CountUp to={daysUntil(race.date)} className="today-big" />
-          <div>
-            <p className="today-race-title">days to {race.title}</p>
-            <p className="muted small">{fmtDay(race.date, { month: "long", day: "numeric", year: "numeric" })}</p>
-          </div>
-        </div>
-      )}
+      <RaceCountdown />
 
       <div className="today-week">
         <p className="today-sub">This week</p>
@@ -198,7 +230,7 @@ export function Home() {
           </div>
         </div>
         <div className="hero-panel">
-          {ready ? <TodayPanel people={people.data} acts={acts.data} events={events.data} /> : <div className="today today-loading"><Loading /></div>}
+          {ready ? <TodayPanel people={people.data} acts={acts.data} /> : <div className="today today-loading"><Loading /></div>}
         </div>
       </section>
 

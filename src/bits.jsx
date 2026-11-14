@@ -39,7 +39,7 @@ export function CountUp({ to, duration = 1600, format = (v) => Math.round(v).toL
   return <span ref={ref} className={`count-up ${className}`}>{format(value)}</span>;
 }
 
-export function SpotlightCard({ children, className = "", as: Tag = "div", tint = "rgba(180, 104, 63, 0.16)", ...rest }) {
+export function SpotlightCard({ children, className = "", as: Tag = "div", tint = "rgba(227, 168, 87, 0.10)", ...rest }) {
   const ref = useRef(null);
   const onMove = (e) => {
     const el = ref.current;

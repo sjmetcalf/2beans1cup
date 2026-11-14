@@ -74,7 +74,7 @@ function Nav({ route }) {
   return (
     <header className="nav" ref={headerRef}>
       <a href="#/" className="nav-brand" aria-label="2beans1cup home">
-        <img className="nav-mark" src="/assets/beans-mark.webp" alt="" width="240" height="198" />
+        <img className="nav-mark" src="/assets/beans-mark-cream.webp" alt="" width="240" height="198" />
         <span className="wordmark">2beans<span className="wordmark-1">1</span>cup</span>
       </a>
       <a href="#/barista" className={`nav-account ${route === "/barista" ? "is-active" : ""}`} aria-label={code ? "Barista settings (you're behind the bar)" : "Barista settings"}>
