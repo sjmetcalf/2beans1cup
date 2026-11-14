@@ -290,6 +290,16 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
+      case "drift.score": {
+        const score = Math.floor(Number(body.score));
+        if (!Number.isFinite(score) || score < 1 || score > 1000000) return json({ error: "Bad score." }, 400);
+        const { data: person } = await db.from("people").select("id").eq("id", body.person_id).maybeSingle();
+        if (!person) return json({ error: "Unknown player." }, 400);
+        const { error } = await db.from("drift_scores").insert({ person_id: person.id, score });
+        if (error) throw error;
+        return json({ ok: true });
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }

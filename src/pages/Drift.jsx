@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Eyebrow } from "../ui.jsx";
+import { Eyebrow, BeanDot } from "../ui.jsx";
+import { select, barista, loadPeople } from "../api.js";
+import { useBaristaCode } from "../hooks.js";
+import { fmtDay } from "../format.js";
 
 // Doppio Drift: a Chrome-dino-style endless runner. The latte-art cup skis the Elk Mountains;
 // jump pines and rocks, duck the ravens. Everything is drawn on one canvas, no images.
 
 const C = { crema: "#f4ede3", paper: "#fbf8f3", roast: "#2b1d14", roast2: "#4a3628", muted: "#7a6a5c", clay: "#b4683f", sage: "#5b7a6a", coffee: "#b47c52", milk: "#fbf6ee", snow: "#fffdf9" };
 const BEST_KEY = "doppio.drift.best";
+const PLAYER_KEY = "doppio.drift.player";
 
 // Cup geometry, in the same 120-unit space as the logo (brand/build_mark.py)
 const CUP = {
@@ -121,6 +125,7 @@ export function Drift() {
   const [score, setScore] = useState(0);
   const [state, setState] = useState("ready");
   const bestRef = useRef(best);
+  const onOverRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
@@ -216,6 +221,7 @@ export function Drift() {
           s.state = "over"; s.t = 0;
           for (let i = 0; i < 14; i++) s.spill.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 60 + Math.random() * 220, vy: -160 - Math.random() * 260, r: 2 + Math.random() * 3.5 });
           setState("over");
+          onOverRef.current?.(ft);
           if (ft > bestRef.current) { bestRef.current = ft; setBest(ft); try { localStorage.setItem(BEST_KEY, String(ft)); } catch { /* ignore */ } }
         }
         setScore(ft);
@@ -303,8 +309,90 @@ export function Drift() {
       </div>
       <p className="muted small drift-help">
         <span className="hide-narrow">Space or ↑ to jump (hold for a bigger air), ↓ to duck. </span>
-        Your best: <b>{best.toLocaleString()} ft</b>
+        Your best on this device: <b>{best.toLocaleString()} ft</b>
       </p>
+      <Leaderboard onOverRef={onOverRef} />
     </section>
+  );
+}
+
+function timeAgo(iso) {
+  const d = new Date(iso), mins = (Date.now() - d) / 60000;
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${Math.round(mins)}m ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+  return fmtDay(iso.slice(0, 10));
+}
+
+function Leaderboard({ onOverRef }) {
+  const code = useBaristaCode();
+  const [people, setPeople] = useState([]);
+  const [runs, setRuns] = useState(null);
+  const [player, setPlayer] = useState(() => { try { return localStorage.getItem(PLAYER_KEY) || ""; } catch { return ""; } });
+  const [note, setNote] = useState("");
+  const load = () => select("drift_scores", "select=id,person_id,score,created_at&order=score.desc,created_at.asc&limit=200").then(setRuns).catch(() => setRuns([]));
+  useEffect(() => { loadPeople().then(setPeople).catch(() => {}); load(); }, []);
+  const pick = (id) => { setPlayer(id); try { localStorage.setItem(PLAYER_KEY, id); } catch { /* ignore */ } };
+
+  // Post each finished run for the chosen player (only when this device has the barista code)
+  useEffect(() => {
+    onOverRef.current = async (ft) => {
+      if (!code || !player || ft < 1) return;
+      try {
+        await barista("drift.score", { person_id: player, score: ft });
+        const prev = (runs || []).filter((r) => r.person_id === player)[0]?.score || 0;
+        setNote(ft > prev ? `New personal best: ${ft.toLocaleString()} ft!` : `Run saved: ${ft.toLocaleString()} ft`);
+        load();
+      } catch (e) { setNote(`Couldn't save that run: ${e.message}`); }
+    };
+  });
+
+  const byId = Object.fromEntries(people.map((p) => [p.id, p]));
+  const bests = people.map((p) => ({ p, best: (runs || []).find((r) => r.person_id === p.id) }));
+  const leader = bests.reduce((a, b) => ((b.best?.score || 0) > (a?.best?.score || 0) ? b : a), null);
+  const top = (runs || []).slice(0, 10);
+
+  return (
+    <div className="drift-board">
+      <div className="drift-board-head">
+        <h2 className="col-title">Leaderboard</h2>
+        {code ? (
+          <div className="drift-player" role="group" aria-label="Who's playing?">
+            <span className="muted small">Playing as</span>
+            {people.map((p) => (
+              <button key={p.id} type="button" className={`chip ${player === p.id ? "is-on" : ""}`} onClick={() => pick(p.id)} aria-pressed={player === p.id}>
+                <BeanDot person={p} size={8} /> {p.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted small">Enter the barista code to put your runs on the board.</p>
+        )}
+      </div>
+      {code && !player && <p className="drift-note">Pick who's playing so your runs count.</p>}
+      {note && <p className="drift-note" role="status">{note}</p>}
+      <div className="drift-bests">
+        {bests.map(({ p, best }) => (
+          <div key={p.id} className={`tile drift-best ${leader && leader.p.id === p.id && best ? "is-leader" : ""}`} style={{ "--bean": p.color }}>
+            <p className="tile-title"><BeanDot person={p} size={9} /><span>{p.name}</span>{leader && leader.p.id === p.id && best && <span className="chip-crown">Leader</span>}</p>
+            <p className="act-big">{best ? best.score.toLocaleString() : "—"}<span>ft</span></p>
+            <p className="muted small">{best ? `Best run, ${timeAgo(best.created_at)}` : "No runs yet"}</p>
+          </div>
+        ))}
+      </div>
+      {top.length > 0 && (
+        <ol className="drift-runs">
+          {top.map((r, i) => (
+            <li key={r.id}>
+              <span className="drift-rank">{i + 1}</span>
+              {byId[r.person_id] && <BeanDot person={byId[r.person_id]} size={8} />}
+              <span className="drift-who">{byId[r.person_id]?.name || "?"}</span>
+              <b>{r.score.toLocaleString()} ft</b>
+              <span className="muted small">{timeAgo(r.created_at)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
