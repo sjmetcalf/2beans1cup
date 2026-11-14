@@ -209,7 +209,8 @@ const RACE_CLIMBS = [{ start: 1800, end: 2100, name: "Star Pass" }, { start: 260
 const ENDLESS_PASSES = ["Star Pass", "Taylor Pass", "Pearl Pass", "Copper Pass", "East Maroon Pass", "Triangle Pass", "Conundrum Pass", "Electric Pass"];
 const CLIMB_REF_V = 190, TRANSITION_REF = 1.4; // a decent pace on the skin track, used for cutoffs
 const CLIMB_SLOPE = 0.18;
-const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / 0.9) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
+const STRIDE_PERIOD = 1.2; // seconds per swing
+const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / STRIDE_PERIOD) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
 const TIER_FT = 1000;
 const baseSpeed = (runT, tier) => Math.min(860, 360 + 9 * runT) + 45 * tier;
 // Cutoffs come from a clean, hit-free run plus a small margin
@@ -346,6 +347,7 @@ export function Drift() {
       else { s.dist += ft * 10; say(s, `${label} · +${ft} ft`); }
     };
 
+    const beanY = (lift) => ground - Math.min(lift, ground - 44); // never above the visible sky
     const spawn = (s) => {
       const R = s.rng, X = W + 30, T = s.tier, r = R();
       const gapK = T >= 3 ? 0.85 : 1;
@@ -354,11 +356,11 @@ export function Drift() {
         const size = R() < 0.4 ? "s" : R() < 0.6 ? "m" : "l";
         const k = KICKERS[size];
         s.obstacles.push({ kind: "kicker", size, x: X, w: k.w, h: k.h, launch: k.launch });
-        if (R() < 0.6) s.obstacles.push({ kind: "bean", x: X + k.w + 90 + R() * 80, w: 16, h: 16, by: ground - 120 - R() * 70 }); // reward for the air
+        if (R() < 0.6) s.obstacles.push({ kind: "bean", x: X + k.w + 90 + R() * 80, w: 16, h: 16, by: beanY(70 + R() * 60) }); // reward for the air
         s.nextIn = s.speed * (1.25 + (size === "l" ? 0.6 : size === "m" ? 0.35 : 0.1)) + k.w;
         return;
       }
-      if (r < 0.25) { s.obstacles.push({ kind: "bean", x: X, w: 16, h: 16, by: ground - 26 - R() * 80 }); s.nextIn = s.speed * 0.3; return; }
+      if (r < 0.25) { s.obstacles.push({ kind: "bean", x: X, w: 16, h: 16, by: beanY(26 + R() * 70) }); s.nextIn = s.speed * 0.3; return; }
       if (T >= 1 && r < 0.32) { // ice sheet ending at a rock: jump before you hit the ice
         const w = s.speed * (0.32 + R() * 0.12);
         s.obstacles.push({ kind: "ice", x: X, w, h: 4 });
@@ -576,8 +578,8 @@ export function Drift() {
       const x = cupX();
       const av = s.aval;
       // follow the cup only when kicker air would carry it off the top of the screen
-      const camTarget = s.phase === "off" ? Math.max(s.cam || 0, 70) : slope < 0 ? Math.max(0, (W - x) * -slope - ground + 70) : s.fromKicker ? Math.max(0, -s.y - ground + CUP_H + 24) : 0; // hold the view at the pass until skins are off
-      s.cam = (s.cam || 0) + (camTarget - (s.cam || 0)) * 0.12;
+      const camTarget = s.phase === "off" ? Math.max(s.cam || 0, 70) : slope < 0 ? Math.max(0, (W - x) * -slope - ground + 70) : Math.max(0, -s.y - ground + CUP_H + 60); // hold the view at the pass until skins are off
+      s.cam = (s.cam || 0) + (camTarget - (s.cam || 0)) * (camTarget > (s.cam || 0) ? 0.35 : 0.1); // catch up fast on the way up, ease back down
       if (Math.abs(s.cam) < 0.3) s.cam = 0;
       ctx.save(); ctx.translate(0, s.cam);
       if (av && av.t > 1.2) { ctx.save(); ctx.translate((Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2.4); }
@@ -635,7 +637,7 @@ export function Drift() {
       ctx.restore();
       if (av && av.t > 1.2) ctx.restore();
       // the cup (unsheared), leaning into the fall line; spins in the air; blinks while recovering
-      const lean = Math.atan(slope) * (slope < 0 ? 0.6 : 0.85) + (s.phase === "climb" ? Math.sin(s.strideT * ((2 * Math.PI) / 0.9)) * 0.05 : 0);
+      const lean = Math.atan(slope) * (slope < 0 ? 0.6 : 0.85) + (s.phase === "climb" ? Math.sin(s.strideT * ((2 * Math.PI) / STRIDE_PERIOD)) * 0.05 : 0);
       const spinA = s.spin ? (s.spin.t / 0.42) * Math.PI * 2 : 0;
       const wobble = s.onIce ? Math.sin(s.t * 30) * 0.06 : Math.sin(s.t * 18) * 0.02;
       const tilt = s.state === "over" ? 0.9 : lean + spinA + (s.y < 0 ? Math.max(-0.35, Math.min(0.2, s.vy / 2600)) : wobble);
