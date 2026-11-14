@@ -1,15 +1,29 @@
 # 2beans1cup
 
-A third-wave-cafe-styled training HQ for two athletes chasing the Grand Traverse Triple Crown (ski, run, bike — Crested Butte ↔ Aspen).
+A third-wave-cafe-styled training house for two athletes chasing the Grand Traverse Triple Crown (ski, run, bike between Crested Butte and Aspen). Live at **[2beans1cup.com](https://2beans1cup.com)**.
 
-## Stack
-- **Hosting:** Cloudflare Workers (static assets), deployed from this repo via Workers Builds
-- **Backend:** Supabase (auth, Postgres with RLS, storage for activity files)
+## Pages
+- **Cafe** (`#/`): badge, race countdowns, last-30-days totals, latest activities, what's coming up
+- **The Menu** (`#/menu`): shared calendar with races, sessions, logistics and each of our activities dotted in
+- **Pour Log** (`#/pour-log`): every activity, filterable by sport and person
+- **Side by Side** (`#/side-by-side`): totals by sport and week-by-week comparison
+- **Bar Station** (`#/bar`): checklists per race
+- **Barista** (`#/barista`): enter the shared code, rename beans, connect Garmin
 
-## Local preview
+## How it works
+- **Public read, protected write.** Anyone can view. Changes go through the `barista` Supabase edge function, which checks a shared code stored in the `BARISTA_CODE` secret.
+- **Garmin:** each of us pastes a Garmin Connect *Personal API key* on the Barista page. Keys live in a table the browser can never read; the edge function swaps them for access tokens and pulls activity summaries. GPS coordinates are never stored.
+- **Hosting:** Cloudflare Worker serving `public/` (static assets), deployed on every push to `main`.
+- **Backend:** Supabase (`supabase/migrations`, `supabase/functions/barista`).
+
+## Develop
 ```sh
-npx wrangler dev
+npm install
+npm run build        # bundles src/ → public/assets/app.js + app.css (committed)
+npx wrangler dev     # preview locally
 ```
 
-## Status
-Placeholder page in `public/`. The app itself is next.
+Motion components (BlurText, CountUp, SpotlightCard, Marquee, ShinyText, grain) are dependency-free takes on patterns from [React Bits](https://reactbits.dev).
+
+## Brand
+`brand/` holds the badge: lettering in Inter Display SemiBold around the original beans illustration. Regenerate with `python3 brand/build_badge.py`.
