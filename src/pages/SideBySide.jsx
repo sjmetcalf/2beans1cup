@@ -1,40 +1,45 @@
 import { useMemo, useState } from "react";
-import { useData } from "../hooks.js";
+import { useData, useInView } from "../hooks.js";
 import { loadPeople, loadActivities } from "../api.js";
 import { miles, feet, startOfWeek, SPORTS } from "../format.js";
 import { Segmented, Loading, Empty, ErrorNote, BeanDot } from "../ui.jsx";
 import { BlurText, CountUp } from "../bits.jsx";
 
 const METRICS = [
-  { key: "dist", label: "Miles", get: (a) => miles(a.distance_m || 0), fmt: (v) => v.toFixed(1) },
-  { key: "vert", label: "Vert ft", get: (a) => feet(a.elevation_gain_m || 0), fmt: (v) => Math.round(v).toLocaleString() },
-  { key: "time", label: "Hours", get: (a) => (a.duration_s || 0) / 3600, fmt: (v) => v.toFixed(1) },
-  { key: "count", label: "Pours", get: () => 1, fmt: (v) => Math.round(v).toString() },
+  { key: "dist", label: "Miles", unit: "mi", get: (a) => miles(a.distance_m || 0), fmt: (v) => v.toFixed(1) },
+  { key: "vert", label: "Vert", unit: "ft", get: (a) => feet(a.elevation_gain_m || 0), fmt: (v) => Math.round(v).toLocaleString() },
+  { key: "time", label: "Hours", unit: "h", get: (a) => (a.duration_s || 0) / 3600, fmt: (v) => v.toFixed(1) },
+  { key: "count", label: "Pours", unit: "", get: () => 1, fmt: (v) => Math.round(v).toString() },
 ];
 
-function sum(list, get) {
-  return list.reduce((s, a) => s + get(a), 0);
+const sum = (list, get) => list.reduce((s, a) => s + get(a), 0);
+
+// Each bean gets a gradient from its own color to a lighter, warmer tint (oec.fyi-style brand stroke).
+function tint(hex, amount = 0.38) {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c, t) => Math.round(c + (t - c) * amount);
+  const r = mix((n >> 16) & 255, 0xe8), g = mix((n >> 8) & 255, 0xc9), b = mix(n & 255, 0x9a);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+const gradId = (p) => `bean-grad-${p.id}`;
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const pow = 10 ** Math.floor(Math.log10(v));
+  const n = v / pow;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  return step * pow;
 }
 
-function DuelRow({ label, people, values, fmt }) {
-  const max = Math.max(...values, 0.0001);
-  return (
-    <div className="duel-row">
-      <p className="duel-label">{label}</p>
-      <div className="duel-bars">
-        {people.map((p, i) => (
-          <div key={p.id} className="duel-bar">
-            <span className="duel-fill" style={{ width: `${(values[i] / max) * 100}%`, background: p.color }} />
-            <span className="duel-val">{fmt(values[i])}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WeeklyChart({ people, acts, weeks, metric }) {
+function TrendChart({ people, acts, weeks, metric }) {
+  const [ref, inView] = useInView({ threshold: 0.25 });
   const m = METRICS.find((x) => x.key === metric);
+  const width = 960;
+  const height = 300;
+  const pad = { left: 40, right: 16, top: 16, bottom: 28 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+
   const start = startOfWeek(new Date());
   start.setDate(start.getDate() - 7 * (weeks - 1));
   const buckets = Array.from({ length: weeks }, (_, i) => {
@@ -43,46 +48,103 @@ function WeeklyChart({ people, acts, weeks, metric }) {
     return { start: d, vals: people.map(() => 0) };
   });
   acts.forEach((a) => {
-    const t = new Date(a.start_time);
-    const idx = Math.floor((startOfWeek(t) - start) / (7 * 864e5));
+    const idx = Math.floor((startOfWeek(new Date(a.start_time)) - start) / (7 * 864e5));
     const pi = people.findIndex((p) => p.id === a.person_id);
     if (idx >= 0 && idx < weeks && pi >= 0) buckets[idx].vals[pi] += m.get(a);
   });
-  const max = Math.max(...buckets.flatMap((b) => b.vals), 0.0001);
-  const W = 760, H = 220, padL = 36, padB = 26, padT = 10;
-  const bw = (W - padL) / weeks;
-  const barW = Math.max(3, (bw - 6) / people.length);
-  const ticks = [0, 0.5, 1].map((f) => f * max);
+
+  const all = buckets.flatMap((b) => b.vals);
+  const top = niceMax(Math.max(...all, 0));
+  const avg = all.length ? all.reduce((s, v) => s + v, 0) / all.length : 0;
+  const x = (i) => (weeks <= 1 ? pad.left + innerW / 2 : pad.left + (i / (weeks - 1)) * innerW);
+  const y = (v) => pad.top + (1 - v / top) * innerH;
+  const labelEvery = Math.ceil(weeks / 6);
+
+  const series = people.map((p, pi) => {
+    const pts = buckets.map((b, i) => ({ x: x(i), y: y(b.vals[pi]), v: b.vals[pi], week: b.start }));
+    const d = pts.map((pt, i) => `${i === 0 ? "M" : "L"}${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(" ");
+    return { p, pts, d };
+  });
+
+  const label = series
+    .map((s) => `${s.p.name}: ${s.pts.map((pt) => `${pt.week.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${m.fmt(pt.v)}`).join(", ")}`)
+    .join(". ");
 
   return (
-    <svg className="weekly-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Weekly ${m.label} for each of us`}>
-      {ticks.map((t, i) => {
-        const y = H - padB - (t / max) * (H - padB - padT);
-        return (
-          <g key={i}>
-            <line x1={padL} x2={W} y1={y} y2={y} className="grid-line" />
-            <text x={padL - 6} y={y + 4} className="axis-label" textAnchor="end">{m.fmt(t)}</text>
-          </g>
-        );
-      })}
-      {buckets.map((b, i) => (
-        <g key={i} transform={`translate(${padL + i * bw + 3},0)`}>
-          {b.vals.map((v, pi) => {
-            const h = (v / max) * (H - padB - padT);
-            return (
-              <rect key={pi} x={pi * barW} y={H - padB - h} width={barW - 1} height={Math.max(0, h)} rx="2" fill={people[pi].color}>
-                <title>{`${people[pi].name}, week of ${b.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${m.fmt(v)} ${m.label.toLowerCase()}`}</title>
-              </rect>
-            );
-          })}
-          {(i % Math.ceil(weeks / 8) === 0) && (
-            <text x={(bw - 6) / 2} y={H - 8} className="axis-label" textAnchor="middle">
-              {b.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </text>
-          )}
+    <svg ref={ref} className={`trend-chart ${inView ? "is-in" : ""}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Weekly ${m.label.toLowerCase()}. ${label}`}>
+      <defs>
+        {people.map((p) => (
+          <linearGradient key={p.id} id={gradId(p)} gradientUnits="userSpaceOnUse" x1={pad.left} y1="0" x2={width - pad.right} y2="0">
+            <stop offset="0%" stopColor={p.color} />
+            <stop offset="100%" stopColor={tint(p.color)} />
+          </linearGradient>
+        ))}
+      </defs>
+      {[0, top].map((mark) => (
+        <g key={mark}>
+          <line className="trend-grid" x1={pad.left} x2={width - pad.right} y1={y(mark)} y2={y(mark)} />
+          <text className="trend-label" x={pad.left - 8} y={y(mark) + 4} textAnchor="end">{m.fmt(mark)}</text>
+        </g>
+      ))}
+      {avg > 0 && (
+        <g>
+          <line className="trend-ref" x1={pad.left} x2={width - pad.right} y1={y(avg)} y2={y(avg)} />
+          <text className="trend-label" x={pad.left - 8} y={y(avg) + 4} textAnchor="end">{m.fmt(avg)}</text>
+        </g>
+      )}
+      {buckets.map((b, i) =>
+        i % labelEvery === 0 || i === weeks - 1 ? (
+          <text key={i} className="trend-label" x={x(i)} y={height - 8} textAnchor="middle">
+            {b.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </text>
+        ) : null,
+      )}
+      {series.map((s) => (
+        <g key={s.p.id}>
+          {s.pts.length > 1 && <path className="trend-line" d={s.d} stroke={`url(#${gradId(s.p)})`} pathLength="1" />}
+          {s.pts.map((pt, i) => (
+            <circle key={i} className="trend-point" cx={pt.x} cy={pt.y} r={weeks > 16 ? 3.5 : 5} stroke={`url(#${gradId(s.p)})`} style={{ transitionDelay: `${300 + i * 25}ms` }}>
+              <title>{`${s.p.name}, week of ${pt.week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${m.fmt(pt.v)} ${m.unit}`}</title>
+            </circle>
+          ))}
         </g>
       ))}
     </svg>
+  );
+}
+
+function Meter({ person, value, max, fmt }) {
+  const [ref, inView] = useInView({ threshold: 0.3 });
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="meter-row" ref={ref}>
+      <BeanDot person={person} size={8} />
+      <div className="meter" aria-hidden="true">
+        <span style={{ width: inView ? `${pct}%` : 0, background: `linear-gradient(90deg, ${person.color}, ${tint(person.color)})` }} />
+      </div>
+      <strong>{fmt(value)}</strong>
+    </div>
+  );
+}
+
+function SportCard({ sport, people, list }) {
+  return (
+    <div className="chart-card sport-card">
+      <header className="chart-card-head">
+        <h3>{SPORTS[sport].label}</h3>
+        <p>{list.length} {list.length === 1 ? "pour" : "pours"} between us</p>
+      </header>
+      {METRICS.filter((m) => m.key !== "count").map((m) => {
+        const values = people.map((p) => sum(list.filter((a) => a.person_id === p.id), m.get));
+        const max = Math.max(...values);
+        return (
+          <div key={m.key} className="meter-group">
+            <span className="meter-label">{m.label}{m.unit ? ` (${m.unit})` : ""}</span>
+            {people.map((p, i) => <Meter key={p.id} person={p} value={values[i]} max={max} fmt={m.fmt} />)}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -99,12 +161,13 @@ export function SideBySide() {
 
   const ps = people.data || [];
   const weeks = days <= 30 ? 6 : days <= 90 ? 13 : 26;
+  const m = METRICS.find((x) => x.key === metric);
 
   return (
     <section className="section section-first">
       <p className="eyebrow">Side by Side</p>
       <BlurText as="h1" text="Same beans, different roasts." className="page-title" />
-      <p className="lede">How the two of us stack up by sport. Bars are scaled to whoever did more.</p>
+      <p className="lede">How the two of us stack up by sport. Meters are scaled to whoever did more.</p>
 
       <div className="toolbar">
         <Segmented label="Period" value={days} onChange={setDays} options={[{ value: 7, label: "7 days" }, { value: 30, label: "30 days" }, { value: 90, label: "90 days" }, { value: 365, label: "Year" }]} />
@@ -122,45 +185,41 @@ export function SideBySide() {
             {ps.map((p) => {
               const mine = filtered.filter((a) => a.person_id === p.id);
               return (
-                <div key={p.id} className="split-card" style={{ "--bean": p.color }}>
-                  <p className="split-name"><BeanDot person={p} size={12} /> {p.name}</p>
-                  <dl className="split-stats">
-                    {METRICS.map((m) => (
-                      <div key={m.key}><dt>{m.label}</dt><dd><CountUp to={sum(mine, m.get)} format={m.fmt} /></dd></div>
+                <div key={p.id} className="chart-card">
+                  <header className="chart-card-head">
+                    <h3><BeanDot person={p} size={10} /> {p.name}</h3>
+                    <p>{mine.length ? `${mine.length} ${mine.length === 1 ? "pour" : "pours"} in the last ${days === 365 ? "year" : `${days} days`}` : "Nothing logged in this window."}</p>
+                  </header>
+                  <div className="stat-row">
+                    {METRICS.filter((x) => x.key !== "count").map((x) => (
+                      <div key={x.key}>
+                        <span>{x.label}</span>
+                        <strong><CountUp to={sum(mine, x.get)} format={x.fmt} />{x.unit && <small> {x.unit}</small>}</strong>
+                      </div>
                     ))}
-                  </dl>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="duel-grid">
+          <div className="chart-card trend-card">
+            <header className="chart-card-head chart-card-head-row">
+              <div>
+                <h3>Week by week</h3>
+                <p>{m.label} per week, last {weeks} weeks.</p>
+              </div>
+              <Segmented label="Metric" value={metric} onChange={setMetric} options={METRICS.map((x) => ({ value: x.key, label: x.label }))} />
+            </header>
+            <TrendChart people={ps} acts={acts.data || []} weeks={weeks} metric={metric} />
+            <p className="chart-caption">Dashed line = our average week.</p>
+          </div>
+
+          <div className="sport-grid">
             {["ski", "run", "bike", "other"].map((sport) => {
               const list = filtered.filter((a) => a.sport === sport);
-              if (!list.length) return null;
-              return (
-                <div key={sport} className="duel-card">
-                  <h3>{SPORTS[sport].label}</h3>
-                  {METRICS.map((m) => (
-                    <DuelRow
-                      key={m.key}
-                      label={m.label}
-                      people={ps}
-                      values={ps.map((p) => sum(list.filter((a) => a.person_id === p.id), m.get))}
-                      fmt={m.fmt}
-                    />
-                  ))}
-                </div>
-              );
+              return list.length ? <SportCard key={sport} sport={sport} people={ps} list={list} /> : null;
             })}
-          </div>
-
-          <div className="chart-card">
-            <div className="chart-head">
-              <h3>Week by week</h3>
-              <Segmented label="Metric" value={metric} onChange={setMetric} options={METRICS.map((m) => ({ value: m.key, label: m.label }))} />
-            </div>
-            <WeeklyChart people={ps} acts={acts.data || []} weeks={weeks} metric={metric} />
           </div>
         </>
       )}

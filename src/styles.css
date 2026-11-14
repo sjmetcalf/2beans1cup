@@ -227,24 +227,37 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .log-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .name-cell { min-width: 180px; }
 
-/* Duel bars */
-.duel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
-.duel-card { background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
-.duel-card h3 { font-size: 24px; margin-bottom: 12px; }
-.duel-row { padding: 8px 0; }
-.duel-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
-.duel-bars { display: grid; gap: 5px; }
-.duel-bar { display: flex; align-items: center; gap: 10px; }
-.duel-fill { height: 10px; border-radius: 6px; min-width: 2px; transition: width 0.9s var(--ease); }
-.duel-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Side by Side charts: styled after oec.fyi (thin gradient strokes, hollow points, pill meters) */
+.totals-grid { margin-bottom: 16px; }
+.chart-card { background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; box-shadow: var(--shadow); }
+.chart-card-head h3 { font-size: 1.05rem; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+.chart-card-head p, .chart-caption { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.875rem; line-height: 1.4; text-wrap: balance; }
+.chart-card-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 
-/* Chart */
-.chart-card { margin-top: 16px; background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
-.chart-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.chart-head h3 { font-size: 24px; }
-.weekly-chart { width: 100%; height: auto; display: block; }
-.grid-line { stroke: var(--line); stroke-width: 1; }
-.axis-label { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
+.stat-row { display: flex; gap: 1.75rem; margin: 0.85rem 0 0.15rem; flex-wrap: wrap; }
+.stat-row > div > span { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+.stat-row strong { font-family: var(--display); font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; white-space: nowrap; }
+.stat-row strong .count-up { display: inline; color: inherit; font-size: inherit; font-weight: inherit; }
+.stat-row strong small { font-size: 0.8rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+
+.trend-card { margin-bottom: 16px; }
+.trend-chart { display: block; width: 100%; height: auto; margin-top: 0.35rem; overflow: visible; }
+.trend-grid { stroke: var(--line); stroke-width: 1; }
+.trend-ref { stroke: var(--clay); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.trend-label { fill: var(--muted); font-size: 12px; font-weight: 600; font-family: var(--sans); font-variant-numeric: tabular-nums; }
+.trend-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.trend-point { fill: #fff; stroke-width: 2; opacity: 0; transition: opacity 0.4s var(--ease); }
+.trend-chart.is-in .trend-line { animation: trend-draw 1.2s var(--ease) forwards; }
+.trend-chart.is-in .trend-point { opacity: 1; }
+@keyframes trend-draw { to { stroke-dashoffset: 0; } }
+
+.sport-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.meter-group { margin-top: 1rem; }
+.meter-label { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 600; margin-bottom: 0.4rem; }
+.meter-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 3px 0; }
+.meter-row strong { font-size: 0.875rem; font-variant-numeric: tabular-nums; min-width: 3.5em; text-align: right; }
+.meter { height: 0.28rem; overflow: hidden; border-radius: 999px; background: rgba(43, 29, 20, 0.09); }
+.meter span { display: block; height: 100%; border-radius: 999px; transition: width 0.9s var(--ease); }
 
 /* Calendar */
 .month-nav { display: flex; align-items: center; gap: 12px; }
