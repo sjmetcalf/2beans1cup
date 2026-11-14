@@ -234,46 +234,59 @@ Deno.serve(async (req) => {
 
       // ---------- Private free/busy (never readable without the barista code) ----------
       case "busy.replace": {
+        // One named calendar for one person; re-uploading the same name replaces it.
         const blocks = Array.isArray(body.blocks) ? body.blocks : [];
         if (blocks.length > 10000) return json({ error: "Too many busy blocks in one upload." }, 400);
+        const name = String(body.name ?? "Work").trim().slice(0, 40) || "Work";
+        const kind = body.kind === "off" ? "off" : "busy";
+        const { data: source, error: srcErr } = await db.from("busy_sources").upsert({
+          person_id: body.person_id,
+          name,
+          kind,
+          uploaded_at: new Date().toISOString(),
+          range_start: body.range_start ?? null,
+          range_end: body.range_end ?? null,
+          block_count: 0,
+        }, { onConflict: "person_id,name" }).select("id").single();
+        if (srcErr) throw srcErr;
         const rows = [];
         for (const b of blocks) {
           const s = new Date(b?.s), e = new Date(b?.e);
           if (isNaN(+s) || isNaN(+e) || e <= s) continue;
-          rows.push({ person_id: body.person_id, starts_at: s.toISOString(), ends_at: e.toISOString(), all_day: !!b.all_day });
+          rows.push({ person_id: body.person_id, source_id: source.id, starts_at: s.toISOString(), ends_at: e.toISOString(), all_day: !!b.all_day });
         }
-        const { error: delErr } = await db.from("busy_blocks").delete().eq("person_id", body.person_id);
+        const { error: delErr } = await db.from("busy_blocks").delete().eq("source_id", source.id);
         if (delErr) throw delErr;
         for (let i = 0; i < rows.length; i += 1000) {
           const { error } = await db.from("busy_blocks").insert(rows.slice(i, i + 1000));
           if (error) throw error;
         }
-        const { error: upErr } = await db.from("busy_uploads").upsert({
-          person_id: body.person_id,
-          uploaded_at: new Date().toISOString(),
-          range_start: body.range_start ?? null,
-          range_end: body.range_end ?? null,
-          block_count: rows.length,
-        });
-        if (upErr) throw upErr;
-        return json({ ok: true, saved: rows.length });
+        await db.from("busy_sources").update({ block_count: rows.length }).eq("id", source.id);
+        return json({ ok: true, saved: rows.length, source_id: source.id });
       }
 
       case "busy.list": {
         const from = new Date(body.from ?? Date.now() - 7 * 864e5).toISOString();
         const to = new Date(body.to ?? Date.now() + 60 * 864e5).toISOString();
         const { data: blocks, error } = await db.from("busy_blocks")
-          .select("person_id, starts_at, ends_at, all_day")
+          .select("person_id, source_id, starts_at, ends_at, all_day")
           .lt("starts_at", to).gt("ends_at", from).order("starts_at").limit(10000);
         if (error) throw error;
-        const { data: uploads, error: e2 } = await db.from("busy_uploads").select("*");
+        const { data: sources, error: e2 } = await db.from("busy_sources").select("*").order("uploaded_at");
         if (e2) throw e2;
-        return json({ ok: true, blocks, uploads });
+        return json({ ok: true, blocks, sources });
+      }
+
+      case "busy.kind": {
+        const kind = body.kind === "off" ? "off" : "busy";
+        const { error } = await db.from("busy_sources").update({ kind }).eq("id", body.source_id);
+        if (error) throw error;
+        return json({ ok: true });
       }
 
       case "busy.clear": {
-        await db.from("busy_blocks").delete().eq("person_id", body.person_id);
-        await db.from("busy_uploads").delete().eq("person_id", body.person_id);
+        if (body.source_id) await db.from("busy_sources").delete().eq("id", body.source_id);
+        else await db.from("busy_sources").delete().eq("person_id", body.person_id);
         return json({ ok: true });
       }
 

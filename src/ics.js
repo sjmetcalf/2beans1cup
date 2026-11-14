@@ -142,6 +142,11 @@ function readEvents(text) {
 
 const first = (ev, k) => (ev[k] ? ev[k][0] : null);
 
+function isCancelled(ev) {
+  if (first(ev, "STATUS")?.value.toUpperCase() === "CANCELLED") return true;
+  return /^cancel+ed:/i.test(first(ev, "SUMMARY")?.value || "");
+}
+
 function isFree(ev) {
   const status = first(ev, "STATUS")?.value.toUpperCase();
   if (status === "CANCELLED") return true;
@@ -280,7 +285,7 @@ function* expand(start, rule, windowEndUtc, tz) {
  * Parse ICS text into busy blocks within [fromMs, toMs].
  * Returns { blocks: [{ s, e, all_day }], stats }
  */
-export function icsToBusy(text, { fromMs = Date.now() - 14 * DAY_MS, toMs = Date.now() + 120 * DAY_MS } = {}) {
+export function icsToBusy(text, { fromMs = Date.now() - 14 * DAY_MS, toMs = Date.now() + 120 * DAY_MS, keepFree = false } = {}) {
   const events = readEvents(text);
   const stats = { events: events.length, skippedFree: 0, recurring: 0 };
 
@@ -301,7 +306,8 @@ export function icsToBusy(text, { fromMs = Date.now() - 14 * DAY_MS, toMs = Date
     if (!ds) continue;
     const start = parseValue(ds.value, ds.params);
     if (!start) continue;
-    const free = isFree(ev);
+    // Time-off/holiday calendars often mark days as "free"; keep those, but still drop cancellations
+    const free = keepFree ? isCancelled(ev) : isFree(ev);
 
     let durMs;
     const de = first(ev, "DTEND");

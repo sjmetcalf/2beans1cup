@@ -496,3 +496,13 @@ img, svg { max-width: 100%; }
 .barista-calendars { margin-top: 40px; max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
 .upload-status { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .upload-status li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.upload-files { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.upload-file { width: 100%; padding: 12px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.upload-file-main { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.upload-name { flex: 1 1 160px; min-width: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--milk); font-weight: 600; font-size: 14px; }
+.upload-name:focus { outline: none; border-color: var(--clay); }
+.error-text { color: #9b3b2a; }
+.source-list { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line-strong); display: flex; flex-direction: column; gap: 8px; }
+.source-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.source-info { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; }
+.off-chip { background: color-mix(in srgb, var(--bean) 16%, var(--milk)); }

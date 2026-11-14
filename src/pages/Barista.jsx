@@ -101,20 +101,20 @@ function PersonCard({ person }) {
 }
 
 function Calendars({ people }) {
-  const [uploads, setUploads] = useState([]);
+  const [sources, setSources] = useState([]);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     barista("busy.list", { from: new Date().toISOString(), to: new Date(Date.now() + 864e5).toISOString() })
-      .then((d) => alive && setUploads(d.uploads || []))
+      .then((d) => alive && setSources(d.sources || []))
       .catch(() => {});
     return () => { alive = false; };
   }, [tick]);
   return (
     <div className="barista-calendars">
-      <h2 className="col-title">Work calendars</h2>
+      <h2 className="col-title">Calendars</h2>
       <p className="muted small">Private: only visible behind the bar. See when you're both free on <a href="#/free-time">Free Time</a>.</p>
-      <Upload people={people} uploads={uploads} onDone={() => setTick((t) => t + 1)} />
+      <Upload people={people} sources={sources} onDone={() => setTick((t) => t + 1)} />
     </div>
   );
 }
