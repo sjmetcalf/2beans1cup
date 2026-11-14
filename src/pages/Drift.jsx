@@ -871,7 +871,7 @@ export function Drift() {
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
         <li><b>Spin</b> with ↓ (or the left half on a phone) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
         <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
-        <li><b>Sound:</b> music and sound effects toggle at the top of the game. On an iPhone, flip the silent switch off to hear them.</li>
+        <li><b>Sound:</b> the theme is Bach's Goldberg Variation 1, chiptune style. Music and sound effects toggle at the top of the game. On an iPhone, flip the silent switch off to hear them.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
         <li><b>Race day</b> is the March 28 Grand Traverse course, the same for everyone: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
       </ul>

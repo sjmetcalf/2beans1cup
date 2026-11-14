@@ -82,38 +82,43 @@ export function sfx(name) {
   if (f) try { f(ctx.currentTime + 0.005); } catch { /* ignore */ }
 }
 
-// ---------- theme: "Doppio Drift" (original), A minor, 152 bpm, 8 bars ----------
-// melody tokens per 16th: number = MIDI note, "-" = hold, "." = rest
-const MEL = `
-69 - 72 - 76 - 72 - 74 - 76 - 79 - 76 -
-77 - 76 - 72 - 69 - 72 - - - 74 - 72 -
-72 - 76 - 79 - 84 - 83 - 79 - 76 - 79 -
-74 - 79 - 83 - 79 - 81 - 79 - 77 - 74 -
-81 - - 79 81 - 84 - 81 - 79 - 76 - 72 -
-77 - 81 - 84 - 81 - 79 - 77 - 76 - 74 -
-76 - 79 - 84 - 79 - 76 - 72 - 74 - 76 -
-74 - 71 - 74 - 79 - 76 - - - . . 68 -
-`.trim().split(/\s+/);
-const ROOTS = [45, 41, 48, 43, 45, 41, 48, 40]; // Am F C G Am F C E
-const STEPS = MEL.length; // 128
-const STEP = 60 / 152 / 4;
+// ---------- theme: J. S. Bach, Goldberg Variations BWV 988, Variatio 1 (G major, 1741) ----------
+// Public domain. Notes from the Mutopia Project edition (Bach-Gesellschaft source).
+// Tokens: MIDI note in base 36, then "." + length in 32nd notes (default 2 = a 16th); "rN" = rest.
+const UPPER = "1v 1u 1v.6 1q 1s 1u 1v 1x 1z 21 22 21 22.6 1x 1z 21 22 24 26 22 27 26 27.6 26 24 22 21 24 1x 1v 1u 1s 1q 1p 1q 1u r16 22 20 22.4 1v.4 1n.4 22.4 r4 24 22 24.4 1x.4 1o.4 24.4 r4 26 24 26.4 22.4 29.4 20.8 1z.4 r2 1v 1z 22 27 22 27 29 2b 27 22 1z 1v 1z 22 27 2b 27 26 24 29 24 21 1x 1u 1x 21 24 29 26 24 22 27 22 1z 1v 1s 1v 1z 22 27 26 24 22 21 1v 1s 1p 1l 1p 1s 1v 21 24 22 21 22.4 1i.4 1i.4 1x.4 22.4 26.4 1z.4 1j.4 1j.4 1z.4 24.4 27.4 21 24 1x 1v 1u 1x 22 26 27 24 22 21 26 22 21 1z 1x 1v 1u 1s r8 26 27 29.6 2b 29 27 26 24 22 20 1z 20 22.6 24 22 20 1z 1x 1v 1u 1s 1w 1x 1z 1x 1s 1x 1z 20 1x 23 24 26 24 23 21 1z.18 23 24.6 1r 1s.6 r8 28 29.6 1w 1x.6 r8 1n 1o 1u 1n 1r 1s 1v 1u 1s 1r 1x 1v 1u 1s 1r 1s 1v r16 24.4 20.4 24.4 29.4 1x.4 r4 22.4 1z.4 22.4 27.4 1v.4 20 1x 1s 1o 1l 1o 1s 1x 20 1x 20 24 26 20 1x 1u 1q 1u 1x 20 26 20 26 29 2b 27 22 1z 1v 1z 22 27 2b 25 2b 2e 24 2e 2c 24 22 2c 2b 22 20 24 26 27 29 20 1z 1x 1z 22 1z 1v 20 1x 1v 1u 1z 1v 1u 1s 1q 1o 1n 1l 1j.8";
+const LOWER = "17.4 1n 1l 1n.4 1j.4 17.4 1j.4 16.4 1i 1g 1i.4 1e.4 16.4 1e.4 14.4 1g 1e 1g.4 1j.4 19.4 1p.4 1e.4 1i 1g 1i.4 1e.4 12.4 1e.4 1b 19 1b.6 1e 1g 1i 1j 1l 1n 1j 1c 1b 1c.6 1g 1i 1j 1l 1n 1o 1l 1e 1d 1e.6 1l 1n 1o 1q 1s 1u 1q 1v 1u 1v 1q 1n 1q 1j 1n 1e 1j 1b 1e 17.4 1j.4 1n.4 1j.4 17.4 1j.4 16.4 1i.4 1l.4 1i.4 16.4 1i.4 14.4 1g.4 1j.4 1g.4 14.4 1j.4 19.4 1g.4 1j.4 1g.4 19.4 1j.4 1i 1l 1q 1u 1x 1u 1q 1l 1i 1l 1e 1i 1j 1n 1q 1v 1z 1v 1q 1n 1j 1n 1g 1j 1l.4 1p.4 1q 1l 1i 1e 1l.4 19.4 12 1e 1g 1i 1j 1l 1n 1p 1q.8 12.4 1i 1g 1i.4 1e.4 12.4 1i.4 17.4 1n 1l 1n.4 1j.4 17.4 1n.4 1c.4 1o 1n 1o.4 1i.4 1l.4 1o.4 1l.4 1i.4 1f 1b 1f 1i 1n r20 1i 1j.6 1b 1c.6 r8 1n 1o.6 1g 1f.4 1l.4 1j.4 1a.4 1b.4 1i.4 1g.4 1j 1i 1j.4 1g.4 14.4 1g.4 1c 1g 1l 1o 1s 1o 1l 1g 1c 1g 1e 1c 1b 1e 1j 1n 1q 1n 1j 1e 1b 1e 1c 1b 19.4 1c.4 1g.4 1j.4 1i.4 1g.4 1e.4 1i.4 1l.4 1o.4 1n.4 1l.4 1j.4 1n.4 1q.4 1t.4 1s.4 1q.4 1o.4 1s.4 1u.4 1w.4 1x.4 1v.4 1u.4 1q.4 1v.4 1j.4 1q.4 1e.4 1j 17 19 1b 1c 1e 1g 1i 1j.8";
+const HALF = 384; // 16 bars of 3/4 in 32nds
+const STEP = 60 / 100 / 8; // quarter = 100 bpm, one step per 32nd
+function parseVoice(str, voice, into) {
+  let t = 0;
+  for (const tok of str.split(" ")) {
+    if (tok[0] === "r") { t += +tok.slice(1); continue; }
+    const [n, d] = tok.split(".");
+    const len = d ? +d : 2;
+    (into[t] ||= []).push([voice, parseInt(n, 36), len]);
+    t += len;
+  }
+}
+const EVENTS = [];
+parseVoice(UPPER, 0, EVENTS); parseVoice(LOWER, 1, EVENTS);
+// play it as written: first half twice, second half twice, then back to the top
+const STEPS = HALF * 4;
+const srcStep = (i) => (i < HALF * 2 ? i % HALF : HALF + (i % HALF));
 
 function scheduleStep(i, t) {
-  const tok = MEL[i];
-  if (tok !== "-" && tok !== ".") {
-    let len = 1;
-    while (MEL[(i + len) % STEPS] === "-") len++;
-    tone(t, { f0: hz(+tok), dur: STEP * len * 0.92, vol: 0.55, bus: musicBus, attack: 0.003 });
-    tone(t, { f0: hz(+tok) * 1.004, dur: STEP * len * 0.6, vol: 0.12, bus: musicBus, type: "square" }); // slight chorus
+  const src = srcStep(i);
+  for (const [voice, m, len] of EVENTS[src] || []) {
+    const dur = STEP * len;
+    if (voice === 0) {
+      tone(t, { f0: hz(m + 12), dur: dur * 0.9, vol: 0.42, bus: musicBus, attack: 0.003 });
+      tone(t, { f0: hz(m + 12) * 1.004, dur: Math.min(dur, 0.12) * 0.8, vol: 0.1, bus: musicBus }); // chiptune shimmer
+    } else {
+      tone(t, { f0: hz(m), dur: dur * 0.92, type: "triangle", vol: 0.95, bus: musicBus });
+    }
   }
-  const bar = Math.floor(i / 16), s = i % 16;
-  if (s % 2 === 0) { // bass on 8ths, octave bounce
-    const r = ROOTS[bar] + (s % 4 === 2 ? 12 : 0);
-    tone(t, { f0: hz(r), dur: STEP * 1.8, type: "triangle", vol: 0.9, bus: musicBus });
-  }
-  if (s === 0 || s === 8 || s === 10) tone(t, { f0: 150, f1: 45, dur: 0.12, type: "sine", vol: 1, bus: musicBus }); // kick
-  if (s === 4 || s === 12) noise(t, { dur: 0.1, vol: 0.45, filter: 1800, type: "bandpass", bus: musicBus }); // snare
-  if (s % 4 === 2) noise(t, { dur: 0.03, vol: 0.18, filter: 7000, type: "highpass", bus: musicBus }); // hat
+  const beat = src % 8 === 0, bar = src % 24 === 0;
+  if (bar) tone(t, { f0: 150, f1: 45, dur: 0.12, type: "sine", vol: 0.8, bus: musicBus }); // kick on the downbeat
+  else if (beat) noise(t, { dur: 0.03, vol: 0.14, filter: 7000, type: "highpass", bus: musicBus }); // hat on beats 2 and 3
 }
 
 function tick() {
