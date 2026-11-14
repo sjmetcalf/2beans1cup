@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="2beans1cup">
   <!-- Simple app-icon mark: two beans in a cup. Bold strokes so it reads at 16–32px. -->
-  <rect width="64" height="64" rx="14" fill="#0E0D0C"/>
+  <rect width="64" height="64" rx="14" fill="#f4ede3"/>
   <g transform="rotate(-14 23 24)">
-    <ellipse cx="23" cy="24" rx="7.2" ry="10" fill="#E3A857"/>
-    <path d="M23 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#0E0D0C" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="23" cy="24" rx="7.2" ry="10" fill="#b4683f"/>
+    <path d="M23 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#f4ede3" stroke-width="2.2" stroke-linecap="round"/>
   </g>
   <g transform="rotate(14 37 24)">
-    <ellipse cx="37" cy="24" rx="7.2" ry="10" fill="#8FC1AE"/>
-    <path d="M37 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#0E0D0C" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="37" cy="24" rx="7.2" ry="10" fill="#5b7a6a"/>
+    <path d="M37 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#f4ede3" stroke-width="2.2" stroke-linecap="round"/>
   </g>
-  <path d="M12 30.5h36v6.5a18 18 0 0 1-18 18h0a18 18 0 0 1-18-18z" fill="#0E0D0C" stroke="#F3EEE7" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M48 34.5a6.5 6.5 0 0 1 0 13" fill="none" stroke="#F3EEE7" stroke-width="4" stroke-linecap="round"/>
+  <path d="M12 30.5h36v6.5a18 18 0 0 1-18 18h0a18 18 0 0 1-18-18z" fill="#f4ede3" stroke="#2b1d14" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M48 34.5a6.5 6.5 0 0 1 0 13" fill="none" stroke="#2b1d14" stroke-width="4" stroke-linecap="round"/>
 </svg>
