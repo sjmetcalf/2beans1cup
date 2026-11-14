@@ -1,5 +1,5 @@
 import math, sys
-CX, CY = 57, 44          # centre of the coffee surface
+CX, CY = 55, 46          # centre of the coffee surface
 RX, RY = 31, 16.5      # coffee surface ellipse (perspective)
 coffee="#b47c52"; milk="#fbf6ee"; cup="#5b7a6a"; cupdark="#4b6758"; saucer="#6f8d7e"; saucer_dk="#587466"; rim="#f6efe4"
 
@@ -19,9 +19,6 @@ def mark(bg=True):
     t1=track_points(-0.2,0); t2=track_points(0.24,0)
     def tr(d): return f'<path d="{d}" stroke="{milk}" stroke-width="5.2"/><path d="{d}" stroke="{coffee}" stroke-width="1.9"/>'
     return f'''{'<rect width="120" height="120" rx="26" fill="#f4ede3"/>' if bg else ''}
-  <!-- saucer -->
-  <ellipse cx="{CX}" cy="90" rx="50" ry="16" fill="{saucer}"/>
-  <ellipse cx="{CX}" cy="88.5" rx="43" ry="12.5" fill="{saucer_dk}"/>
   <!-- handle -->
   <path d="M89 52 C 106 50, 107 74, 85 72" fill="none" stroke="{cup}" stroke-width="6" stroke-linecap="round"/>
   <!-- cup body -->
