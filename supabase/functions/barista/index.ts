@@ -52,7 +52,8 @@ async function garminToken(personId: string, apiKey?: string) {
   }
   const res = await fetch(`${GARMIN}/personalapitoken-service/personal-api/personal-api-key/token`, {
     method: "POST",
-    headers: { Authorization: `ApiKey ${apiKey}`, Accept: "application/json" },
+    // Garmin answers 406 if we demand JSON here; accept whatever it sends and parse below.
+    headers: { Authorization: `ApiKey ${apiKey}`, Accept: "*/*" },
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Garmin rejected the key (${res.status}): ${text.slice(0, 200)}`);
