@@ -306,16 +306,14 @@ export function Drift() {
     const stage = stageRef.current;
     const size = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-      if (fsRef.current) {
-        W = stage.clientWidth; H = Math.max(240, stage.clientHeight);
-        ground = Math.round(Math.max(100, H * (H > W ? 0.3 : 0.27)));
-      } else {
-        W = wrap.clientWidth; H = W < 560 ? 400 : 480; ground = Math.round(H * (W < 560 ? 0.3 : 0.24));
-      }
-      // steepest slope that still keeps the far (right-hand) end of the run on screen
+      if (fsRef.current) { W = stage.clientWidth; H = Math.max(240, stage.clientHeight); }
+      else { W = wrap.clientWidth; H = W < 560 ? 400 : 480; }
       const cx = Math.max(64, W * 0.16);
-      slopeMax = Math.min(0.62, (H + 18 - ground) / (W - cx));
-      slope0 = Math.min(0.46, slopeMax * 0.84);
+      const tall = H > W * 1.05; // portrait phones: start lower and run the slope corner to corner
+      ground = Math.round(tall ? H * 0.42 : W < 560 ? H * 0.3 : H * 0.24);
+      // steepest slope that still keeps the far (right-hand) end of the run on screen
+      slopeMax = tall ? Math.min(0.85, (H * 0.92 - ground) / (W - cx)) : Math.min(0.62, (H + 18 - ground) / (W - cx));
+      slope0 = tall ? slopeMax * 0.84 : Math.min(0.46, slopeMax * 0.84);
       canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
