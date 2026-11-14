@@ -314,10 +314,7 @@ export function Drift() {
     const duck = (on) => {
       const s = g(); if (s.state !== "running" || s.phase !== "down") return;
       s.ducking = on;
-      if (on && s.y < -4) {
-        if (s.fromKicker) { if (!s.spin) s.spin = { t: 0 }; } // tricks: spin off a kicker
-        else s.vy = Math.max(s.vy, 900); // normal jump: drop back down fast
-      }
+      if (on && s.y < -4 && !s.spin) s.spin = { t: 0 }; // in the air: spin (points only off kickers)
     };
 
     const onKey = (e) => {
@@ -493,7 +490,7 @@ export function Drift() {
         const floor = kick ? -kickerSurface(kick, cx) : 0;
         const wasRiding = s.riding;
         s.y = s.y + s.vy * dt;
-        if (s.spin) { s.spin.t += dt; if (s.spin.t >= 0.42) { s.spins++; s.spin = s.ducking && s.y < -30 && s.fromKicker ? { t: 0 } : null; } }
+        if (s.spin) { s.spin.t += dt; if (s.spin.t >= 0.42) { s.spins++; s.spin = s.ducking && s.y < -30 ? { t: 0 } : null; } }
         if (s.y >= floor) {
           if (s.airStart != null) {
             const secs = s.t - s.airStart;
@@ -758,7 +755,7 @@ export function Drift() {
       <ul className="drift-rules muted small">
         <li><b>Controls:</b> <span className="hide-narrow">space or ↑ to jump (hold for more air), ↓ to duck on the ground or spin in the air.</span><span className="show-narrow">Jump, and Duck / Spin (spins when you're in the air).</span></li>
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
-        <li><b>Kickers</b> are where the points are: big air and spins (↓ in the air off a kicker) score, but land mid-spin and you lose coffee.</li>
+        <li><b>Spin</b> with ↓ (or Duck / Spin) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
         <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
         <li><b>Race day</b> is the same course for everyone today: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
