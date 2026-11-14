@@ -60,6 +60,6 @@ export const loadActivities = (sinceIso) =>
   cached(`acts:${sinceIso || "all"}`, () =>
     select(
       "activities",
-      `select=id,person_id,sport,activity_type,name,start_time,start_time_local,distance_m,duration_s,elevation_gain_m,avg_hr,max_hr,training_load,aerobic_te&order=start_time.desc&limit=1000${sinceIso ? `&start_time=gte.${encodeURIComponent(sinceIso)}` : ""}`,
+      `select=id,person_id,sport,activity_type,name,start_time,start_time_local,distance_m,duration_s,elevation_gain_m,avg_hr,max_hr,training_load,aerobic_te,hr_zones_s&order=start_time.desc&limit=1000${sinceIso ? `&start_time=gte.${encodeURIComponent(sinceIso)}` : ""}`,
     ),
   );
