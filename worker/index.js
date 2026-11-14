@@ -1,7 +1,7 @@
 // Edge entry for the site. Serves the static app from ./public, and sends every old or
-// alternate hostname (2beans1cup.com, www.*) to https://doppio.team with a permanent redirect.
+// alternate hostname (doppio.team, 2beans1cup.com, www.*) to https://doppiodrifters.com with a permanent redirect.
 // Browsers keep the #/route fragment across redirects, so old links land on the same page.
-const HOME = "doppio.team";
+const HOME = "doppiodrifters.com";
 
 export default {
   async fetch(request, env) {

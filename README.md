@@ -1,6 +1,6 @@
 # Doppio Drifters
 
-A third-wave-cafe-styled training house for two athletes chasing the Grand Traverse Triple Crown (ski, run, bike between Crested Butte and Aspen). Live at **[doppio.team](https://doppio.team)**.
+A third-wave-cafe-styled training house for two athletes chasing the Grand Traverse Triple Crown (ski, run, bike between Crested Butte and Aspen). Live at **[doppiodrifters.com](https://doppiodrifters.com)**.
 
 ## Pages
 - **Cafe** (`#/`): badge, race countdowns, last-30-days totals, latest activities, what's coming up
