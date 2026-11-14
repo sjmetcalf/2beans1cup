@@ -5,6 +5,8 @@ import { miles, feet, startOfWeek, SPORTS } from "../format.js";
 import { Segmented, Loading, Empty, ErrorNote, BeanDot } from "../ui.jsx";
 import { BlurText } from "../bits.jsx";
 import { Positions, PosFirst, pctChange, fmtPct, toneFor } from "../Positions.jsx";
+import { Gauge, SportIcon } from "../Tiles.jsx";
+import { CountUp } from "../bits.jsx";
 
 const METRICS = [
   { key: "dist", label: "Miles", unit: "mi", get: (a) => miles(a.distance_m || 0), fmt: (v) => v.toFixed(1) },
@@ -142,11 +144,104 @@ function withChange(now, before) {
 }
 const signed = (fmt) => (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v));
 
+
+// ---- Tile view ----
+const ICONS = {
+  dist: <SportIcon sport="run" size={18} />,
+  vert: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="m3 19 6-10 4 6 3-4 5 8z" /></svg>,
+  time: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M10 2h4" /></svg>,
+  count: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 9h12v5a6 6 0 0 1-12 0z" /><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17" /><path d="M9 3v3M13 3v3" /></svg>,
+};
+const TILE_TITLES = { dist: "Distance", vert: "Vert", time: "Time", count: "Pours" };
+const UNITS = { dist: "miles", vert: "feet", time: "hours", count: "pours" };
+
+function Chg({ v }) {
+  if (v == null) return null;
+  return <span className={`chg ${toneFor(v)}`}>{fmtPct(v)}</span>;
+}
+
+function HeadToHead({ ps, filtered, previous }) {
+  return (
+    <div className="glance-grid">
+      {METRICS.map((m) => {
+        const now = ps.map((p) => sum(filtered.filter((a) => a.person_id === p.id), m.get));
+        const before = ps.map((p) => sum(previous.filter((a) => a.person_id === p.id), m.get));
+        const total = now.reduce((s, v) => s + v, 0);
+        const lead = ps.length === 2 && now[0] !== now[1] ? (now[0] > now[1] ? 0 : 1) : null;
+        return (
+          <div key={m.key} className="tile glance-tile">
+            <p className="tile-title">{ICONS[m.key]}<span>{TILE_TITLES[m.key]}</span></p>
+            <Gauge parts={ps.map((p, i) => ({ value: now[i], color: p.color }))} target={total}>
+              <strong><CountUp to={total} format={m.fmt} /></strong>
+              <span>{UNITS[m.key]}</span>
+            </Gauge>
+            <div className="tile-foot">
+              <p className="tile-big">
+                {lead == null ? "Dead even" : `${ps[lead].name} +${m.fmt(Math.abs(now[0] - now[1]))}`}
+                <span>{lead == null ? "split down the middle" : `${total ? Math.round((now[lead] / total) * 100) : 0}% of the pour`}</span>
+              </p>
+              <div className="tile-split">
+                {ps.map((p, i) => (
+                  <span key={p.id}><BeanDot person={p} size={7} /><span className="tile-split-name">{p.name}</span> <b>{m.fmt(now[i])}</b><Chg v={pctChange(now[i], before[i])} /></span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SportTiles({ ps, filtered, previous }) {
+  const sports = ["ski", "run", "bike", "other"].filter((sp) => filtered.some((a) => a.sport === sp) || previous.some((a) => a.sport === sp));
+  return (
+    <div className="act-grid sport-tiles">
+      {sports.map((sp) => {
+        const main = sp === "other" ? METRICS[2] : METRICS[0];
+        const rows = ps.map((p) => {
+          const now = filtered.filter((a) => a.sport === sp && a.person_id === p.id);
+          const before = previous.filter((a) => a.sport === sp && a.person_id === p.id);
+          return { p, now: stats(now), chg: pctChange(sum(now, main.get), sum(before, main.get)), main: sum(now, main.get) };
+        });
+        const total = rows.reduce((s, r) => s + r.main, 0);
+        return (
+          <article key={sp} className="tile sport-tile">
+            <header className="act-head">
+              <span className={`act-icon sport-${sp}`}><SportIcon sport={sp} /></span>
+              <div className="act-id">
+                <h3>{SPORTS[sp].label}</h3>
+                <p>{rows.reduce((s, r) => s + r.now.count, 0)} pours · {main.fmt(total)} {main.unit} together</p>
+              </div>
+            </header>
+            {total > 0 && (
+              <div className="zones-bar share-bar" role="img" aria-label={rows.map((r) => `${r.p.name} ${Math.round((r.main / total) * 100)}%`).join(", ")}>
+                {rows.map((r) => r.main > 0 && <span key={r.p.id} style={{ flexGrow: r.main, background: r.p.color }} />)}
+              </div>
+            )}
+            <div className="sport-rows">
+              {rows.map((r) => (
+                <div key={r.p.id} className="sport-row">
+                  <p className="sport-row-who"><BeanDot person={r.p} size={8} /><span className="tile-split-name">{r.p.name}</span><Chg v={r.chg} /></p>
+                  <p className="sport-row-big">{main.fmt(r.main)}<span>{main.unit}</span></p>
+                  <p className="sport-row-sub">{Math.round(r.now.vert).toLocaleString()} ft · {r.now.time.toFixed(1)} h · {r.now.count} {r.now.count === 1 ? "pour" : "pours"}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SideBySide() {
   const people = useData(loadPeople);
   const acts = useData(() => loadActivities());
   const [days, setDays] = useState(30);
   const [metric, setMetric] = useState("time");
+  const [view, setView] = useState(() => { try { return localStorage.getItem("2b1c.sbsview") || "tiles"; } catch { return "tiles"; } });
+  const pickView = (v) => { setView(v); try { localStorage.setItem("2b1c.sbsview", v); } catch { /* ignore */ } };
 
   const filtered = useMemo(() => {
     const since = Date.now() - days * 864e5;
@@ -204,9 +299,7 @@ export function SideBySide() {
 
       <div className="toolbar">
         <Segmented label="Period" value={days} onChange={setDays} options={[{ value: 7, label: "7 days" }, { value: 30, label: "30 days" }, { value: 90, label: "90 days" }, { value: 365, label: "Year" }]} />
-        <div className="legend">
-          {ps.map((p) => <span key={p.id}><BeanDot person={p} size={12} /> {p.name}</span>)}
-        </div>
+        <Segmented label="View" value={view} onChange={pickView} options={[{ value: "tiles", label: "Tiles" }, { value: "table", label: "Table" }]} />
       </div>
 
       {acts.error && <ErrorNote error={acts.error} />}
@@ -214,6 +307,19 @@ export function SideBySide() {
         <Empty title="No pours in this window.">Pick a longer period, or connect Garmin on the <a href="#/barista">Barista</a> page.</Empty>
       ) : (
         <>
+          {view === "tiles" ? (
+            <>
+              <div className="glance-head">
+                <h3 className="col-title">Head to head</h3>
+                <p className="muted small">Last {periodName}. Rings show each bean's share; % is the change vs the {periodName} before.</p>
+              </div>
+              <HeadToHead ps={ps} filtered={filtered} previous={previous} />
+              <div className="glance-head">
+                <h3 className="col-title">By sport</h3>
+              </div>
+              <SportTiles ps={ps} filtered={filtered} previous={previous} />
+            </>
+          ) : (
           <div className="pos-section">
             <div className="chart-card-head chart-card-head-row pos-section-head">
               <div>
@@ -223,8 +329,9 @@ export function SideBySide() {
             </div>
             <Positions label="Training by sport" firstLabel="Sport" columns={gapColumns} rows={posRows} summaries={summaries} firstWidth={150} colWidth={88} />
           </div>
+          )}
 
-          <div className="chart-card trend-card">
+          <div className="chart-card trend-card sbs-trend">
             <header className="chart-card-head chart-card-head-row">
               <div>
                 <h3>Week by week</h3>

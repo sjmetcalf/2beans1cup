@@ -29,8 +29,8 @@ export function Gauge({ parts, target, size = 132, stroke = 10, children }) {
   const scale = Math.max(target || 0, total, 1e-9);
   let offset = 0;
   return (
-    <div className="gauge" ref={ref} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+    <div className="gauge" ref={ref} style={{ width: "100%", maxWidth: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <g transform={`rotate(135 ${size / 2} ${size / 2})`}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="gauge-track" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${arc} ${c}`} />
           {parts.map((p, i) => {
@@ -63,7 +63,7 @@ export function GlanceTile({ title, icon, parts, target, total, fmt, unit, peopl
         <p className="tile-big">{pct == null ? "First week" : `${pct}%`}<span> of a usual week</span></p>
         <p className="tile-split">
           {people.map((p, i) => (
-            <span key={p.id}><BeanDot person={p} size={7} /> {p.name} {fmt(parts[i]?.value || 0)}</span>
+            <span key={p.id}><BeanDot person={p} size={7} /><span className="tile-split-name">{p.name}</span> <b>{fmt(parts[i]?.value || 0)}</b></span>
           ))}
         </p>
       </div>
@@ -90,7 +90,7 @@ export function ZonesTile({ acts }) {
           </div>
           <ul className="zones-legend">
             {zones.map((z, i) => (
-              <li key={i}><span className="zone-swatch" style={{ background: ZONE_COLORS[i] }} />Z{i + 1} <span className="muted">{fmtDuration(z)}</span></li>
+              <li key={i}><span className="zone-swatch" style={{ background: ZONE_COLORS[i] }} /><span>Z{i + 1}</span><span className="muted">{fmtDuration(z)}</span></li>
             ))}
           </ul>
         </>
