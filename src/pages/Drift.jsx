@@ -198,19 +198,34 @@ export const todayDenver = () => new Intl.DateTimeFormat("en-CA", { timeZone: "A
 // Race day: Crested Butte to Aspen, checkpoints with cutoffs (seconds from the start)
 const RACE_FT = 4000;
 const CHECKPOINTS = [
-  { ft: 800, name: "Brush Creek" },
-  { ft: 1600, name: "Friends Hut" },
-  { ft: 2400, name: "Star Pass" },
-  { ft: 3200, name: "Barnard Hut" },
+  { ft: 700, name: "Brush Creek" },
+  { ft: 1400, name: "Friends Hut" },
+  { ft: 2100, name: "Star Pass" },
+  { ft: 2900, name: "Taylor Pass" },
+  { ft: 3400, name: "Barnard Hut" },
 ];
+// Skin climbs: skins on at the bottom, stride up, skins off at the pass
+const RACE_CLIMBS = [{ start: 1800, end: 2100, name: "Star Pass" }, { start: 2600, end: 2900, name: "Taylor Pass" }];
+const ENDLESS_PASSES = ["Star Pass", "Taylor Pass", "Pearl Pass", "Copper Pass", "East Maroon Pass", "Triangle Pass", "Conundrum Pass", "Electric Pass"];
+const CLIMB_REF_V = 190, TRANSITION_REF = 1.4; // a decent pace on the skin track, used for cutoffs
+const CLIMB_SLOPE = 0.18;
+const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / 0.9) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
 const TIER_FT = 1000;
 const baseSpeed = (runT, tier) => Math.min(860, 360 + 9 * runT) + 45 * tier;
 // Cutoffs come from a clean, hit-free run plus a small margin
 (() => {
   let t = 0, trav = 0; const dt = 1 / 120; const marks = [...CHECKPOINTS.map((c) => c.ft), RACE_FT];
-  const times = [];
-  while (trav / 10 < RACE_FT) { const tier = Math.min(4, Math.floor(trav / 10 / TIER_FT)); trav += baseSpeed(t, tier) * dt; t += dt; while (marks.length && trav / 10 >= marks[0]) { marks.shift(); times.push(t); } }
-  CHECKPOINTS.forEach((c, i) => (c.cutoff = Math.ceil(times[i] * 1.07 + 1)));
+  const times = [], climbs = RACE_CLIMBS.map((c) => ({ ...c }));
+  while (trav / 10 < RACE_FT) {
+    const ft = trav / 10, c = climbs[0];
+    if (c && ft >= c.start && !c.on) { c.on = true; t += TRANSITION_REF; }
+    const climbing = c && c.on && ft < c.end;
+    if (c && c.on && ft >= c.end) { climbs.shift(); t += TRANSITION_REF; }
+    const tier = Math.min(4, Math.floor(ft / TIER_FT));
+    trav += (climbing ? CLIMB_REF_V : baseSpeed(t, tier)) * dt; t += dt;
+    while (marks.length && trav / 10 >= marks[0]) { marks.shift(); times.push(t); }
+  }
+  CHECKPOINTS.forEach((c, i) => (c.cutoff = Math.ceil(times[i] * 1.08 + 2)));
 })();
 
 const TIERS = [
@@ -229,6 +244,8 @@ function newGame(W, mode, course) {
     ducking: false, obstacles: [], nextIn: W * 0.9, flakes: [], spill: [], spray: [], splash: [],
     aval: null, nextAval: 1200 + (mode === "race" ? 300 : 0), tier: 0, tierT: 0, fill: 1, inv: 0, slowT: 0,
     spin: null, spins: 0, cam: 0, raceT: 0, raceBonus: 0, cpNext: 0, cpMsg: null, cpT: 0, finishSpawned: false,
+    phase: "down", climb: mode === "race" ? { ...RACE_CLIMBS[0] } : { start: 1200, end: 1450, name: ENDLESS_PASSES[0] }, climbN: 0,
+    climbV: 0, strideT: 0, taps: 0, need: 0, transT: 0, slopeCur: null,
   };
 }
 
@@ -277,14 +294,24 @@ export function Drift() {
     const slopeNow = (s) => Math.min(slope0 + 0.03 * s.tier, slopeMax);
 
     const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); };
+    const tapAction = (s) => {
+      if (s.phase === "on" || s.phase === "off") { s.taps++; s.tapFx = 0.15; return; }
+      if (s.phase === "climb") {
+        if (s.t - (s.lastTap || 0) < 0.12) return; s.lastTap = s.t;
+        const m = strideMeter(s.strideT);
+        if (m > 0.36 && m < 0.64) { s.climbV = Math.min(280, s.climbV + 95); s.strideFx = 0.35; }
+        else { s.climbV = Math.max(40, s.climbV - 35); s.slipFx = 0.45; }
+      }
+    };
     const jump = () => {
       const s = g();
       if (s.state !== "running") { if (s.state !== "ready" && s.t < 0.5) return; start(); return; }
+      if (s.phase !== "down") { tapAction(s); return; }
       if (s.vy === 0 && !s.onIce) { s.vy = -760; s.ducking = false; s.riding = false; }
     };
     const releaseJump = () => { const s = g(); if (s.vy < -360) s.vy = -360; };
     const duck = (on) => {
-      const s = g(); if (s.state !== "running") return;
+      const s = g(); if (s.state !== "running" || s.phase !== "down") return;
       s.ducking = on;
       if (on && s.y < -4) {
         if (s.fromKicker) { if (!s.spin) s.spin = { t: 0 }; } // tricks: spin off a kicker
@@ -407,9 +434,36 @@ export function Drift() {
         if (tier > s.tier) { s.tier = tier; s.tierT = 2.6; }
         s.tierT = Math.max(0, s.tierT - dt);
         s.speed = baseSpeed(s.runT, s.tier);
-        // avalanches (from tier 1 on)
+        // skin climbs: clear the run-out, then skins on / stride up / skins off
+        const cl = s.climb;
+        const nearClimb = !!cl && s.trav + W * 1.3 >= cl.start * 10;
+        if (s.phase === "down" && cl && ftPhys >= cl.start && s.vy === 0 && s.y > -2) {
+          s.phase = "on"; s.taps = 0; s.need = 6; s.transT = 0; s.obstacles = s.obstacles.filter((o) => o.kind === "gate" || o.kind === "finish"); s.aval = null; s.ducking = false;
+        }
+        if (s.phase === "on" || s.phase === "off") {
+          s.transT += dt;
+          if (s.taps >= s.need) {
+            const secs = s.transT;
+            if (s.phase === "on") { s.phase = "climb"; s.climbV = 120; s.strideT = 0; say(s, `Skins on · ${secs.toFixed(1)}s`, 1.4); }
+            else {
+              s.phase = "down"; s.nextIn = W * 0.5; s.climbN++;
+              if (s.mode === "endless" && secs < 1.6) reward(s, 30, 0, `Quick transition ${secs.toFixed(1)}s`); else say(s, `Skins off · ${secs.toFixed(1)}s`, 1.4);
+              s.climb = s.mode === "race" ? (RACE_CLIMBS[s.climbN] ? { ...RACE_CLIMBS[s.climbN] } : null) : { start: cl.end + 1500, end: cl.end + 1500 + 250 + 25 * Math.min(4, s.tier), name: ENDLESS_PASSES[s.climbN % ENDLESS_PASSES.length] };
+              if (s.nextAval < ftPhys + 300) s.nextAval = ftPhys + 300;
+            }
+          }
+        }
+        if (s.phase === "climb") {
+          s.strideT += dt;
+          s.climbV = Math.max(55, s.climbV - 110 * dt);
+          if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = 5; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; }
+        }
+        s.summitT = Math.max(0, (s.summitT || 0) - dt);
+        s.strideFx = Math.max(0, (s.strideFx || 0) - dt); s.slipFx = Math.max(0, (s.slipFx || 0) - dt); s.tapFx = Math.max(0, (s.tapFx || 0) - dt);
+
+        // avalanches (from tier 1 on), never on or near a climb
         let mul = 1;
-        if (!s.aval && ftPhys > s.nextAval) s.aval = { t: 0, dur: 8.5, ballIn: 1.6, balls: 0 };
+        if (!s.aval && s.phase === "down" && !nearClimb && ftPhys > s.nextAval) s.aval = { t: 0, dur: 8.5, ballIn: 1.6, balls: 0 };
         if (s.aval) {
           const a = s.aval; a.t += dt;
           mul = a.t < 1.2 ? 1 : 1 + 0.3 * Math.min(1, (a.t - 1.2) / 1.2);
@@ -426,7 +480,7 @@ export function Drift() {
         }
         s.inv = Math.max(0, s.inv - dt);
         s.slowT = Math.max(0, s.slowT - dt);
-        const v = s.speed * mul * (1 - 0.4 * (s.slowT / 1.6)) * (s.onIce ? 1.12 : 1);
+        const v = s.phase === "climb" ? s.climbV : s.phase !== "down" ? 0 : s.speed * mul * (1 - 0.4 * (s.slowT / 1.6)) * (s.onIce ? 1.12 : 1);
         s.mul = mul;
         s.dist += v * dt; s.trav += v * dt;
 
@@ -462,7 +516,7 @@ export function Drift() {
         });
         s.obstacles = s.obstacles.filter((o) => o.x + o.w > -60 && !o.taken);
         s.nextIn -= v * dt;
-        if (s.nextIn <= 0 && !s.aval) spawn(s);
+        if (s.nextIn <= 0 && !s.aval && s.phase === "down" && !nearClimb) spawn(s);
 
         // surfaces: ice, tree wells
         const onGround = s.vy === 0 && s.y > -4;
@@ -501,7 +555,7 @@ export function Drift() {
       s.spill.forEach((p) => { p.vy += 900 * dt; p.x += p.vx * dt; p.y = Math.min(ground - 1, p.y + p.vy * dt); if (p.y >= ground - 1) p.vx *= 0.9; });
       s.splash.forEach((p) => { p.life -= dt; p.vy += 900 * dt; p.x += p.vx * dt; p.y = Math.min(ground - 1, p.y + p.vy * dt); });
       s.splash = s.splash.filter((p) => p.life > 0);
-      if (s.state === "running" && s.vy === 0) for (let i = 0; i < 2; i++) s.spray.push({ x: cupX() - CUP_W * 0.3, y: ground - 2, vx: -s.speed * (0.15 + Math.random() * 0.25), vy: -60 - Math.random() * 140, life: 0.45 + Math.random() * 0.25, r: 1 + Math.random() * 2 });
+      if (s.state === "running" && s.vy === 0 && s.phase === "down") for (let i = 0; i < 2; i++) s.spray.push({ x: cupX() - CUP_W * 0.3, y: ground - 2, vx: -s.speed * (0.15 + Math.random() * 0.25), vy: -60 - Math.random() * 140, life: 0.45 + Math.random() * 0.25, r: 1 + Math.random() * 2 });
       s.spray.forEach((p) => { p.life -= dt; p.vy += 500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; });
       s.spray = s.spray.filter((p) => p.life > 0);
       if (s.flakes.length < 40) s.flakes.push({ x: Math.random() * W, y: -5, v: 20 + Math.random() * 35, r: 0.8 + Math.random() * 1.6 });
@@ -511,7 +565,9 @@ export function Drift() {
 
     const draw = (s) => {
       const off = s.trav;
-      const slope = slopeNow(s);
+      const slopeTarget = s.phase === "on" || s.phase === "climb" ? -CLIMB_SLOPE : slopeNow(s);
+      s.slopeCur = s.slopeCur == null ? slopeTarget : s.slopeCur + (slopeTarget - s.slopeCur) * 0.06;
+      const slope = s.slopeCur;
       const sky = ctx.createLinearGradient(0, 0, 0, ground);
       sky.addColorStop(0, C.paper); sky.addColorStop(1, C.crema);
       ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
@@ -520,7 +576,7 @@ export function Drift() {
       const x = cupX();
       const av = s.aval;
       // follow the cup only when kicker air would carry it off the top of the screen
-      const camTarget = s.fromKicker ? Math.max(0, -s.y - ground + CUP_H + 24) : 0;
+      const camTarget = s.phase === "off" ? Math.max(s.cam || 0, 70) : slope < 0 ? Math.max(0, (W - x) * -slope - ground + 70) : s.fromKicker ? Math.max(0, -s.y - ground + CUP_H + 24) : 0; // hold the view at the pass until skins are off
       s.cam = (s.cam || 0) + (camTarget - (s.cam || 0)) * 0.12;
       if (Math.abs(s.cam) < 0.3) s.cam = 0;
       ctx.save(); ctx.translate(0, s.cam);
@@ -547,6 +603,12 @@ export function Drift() {
         else if (o.kind === "gate") drawGate(ctx, o.x, ground, o.name, false);
         else if (o.kind === "finish") drawGate(ctx, o.x, ground, o.name, true);
       });
+      if (s.phase !== "down") {
+        const prog = s.phase === "on" ? Math.min(1, s.taps / s.need) : s.phase === "off" ? 1 - Math.min(1, s.taps / s.need) : 1;
+        ctx.strokeStyle = C.roast2; ctx.lineWidth = 3; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(x - 30, ground - 1); ctx.lineTo(x + 28, ground - 1); ctx.quadraticCurveTo(x + 36, ground - 1, x + 37, ground - 7); ctx.stroke();
+        if (prog > 0) { ctx.strokeStyle = C.clay; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 28, ground + 1.5); ctx.lineTo(x - 28 + 56 * prog, ground + 1.5); ctx.stroke(); }
+      }
       const air = Math.min(1, -s.y / 120);
       ctx.fillStyle = `rgba(43,29,20,${0.16 * (1 - air * 0.6)})`;
       ctx.beginPath(); ctx.ellipse(x, ground + 2, CUP_W * 0.42 * (1 - air * 0.3), 4, 0, 0, Math.PI * 2); ctx.fill();
@@ -573,7 +635,7 @@ export function Drift() {
       ctx.restore();
       if (av && av.t > 1.2) ctx.restore();
       // the cup (unsheared), leaning into the fall line; spins in the air; blinks while recovering
-      const lean = Math.atan(slope) * 0.85;
+      const lean = Math.atan(slope) * (slope < 0 ? 0.6 : 0.85) + (s.phase === "climb" ? Math.sin(s.strideT * ((2 * Math.PI) / 0.9)) * 0.05 : 0);
       const spinA = s.spin ? (s.spin.t / 0.42) * Math.PI * 2 : 0;
       const wobble = s.onIce ? Math.sin(s.t * 30) * 0.06 : Math.sin(s.t * 18) * 0.02;
       const tilt = s.state === "over" ? 0.9 : lean + spinA + (s.y < 0 ? Math.max(-0.35, Math.min(0.2, s.vy / 2600)) : wobble);
@@ -627,11 +689,28 @@ export function Drift() {
         if (small) { ctx.font = "600 14px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2; ctx.fillText(small, wx, wy + Math.min(42, W / 9)); }
         ctx.globalAlpha = 1;
       };
-      if (s.state === "running") {
+      if (s.state === "running" && s.phase !== "down") {
+        if (s.phase === "on" || s.phase === "off") {
+          const label = s.phase === "on" ? "Skins on!" : `${s.summit} · Skins off!`;
+          banner(s.phase === "off" && s.summitT > 1.2 ? `Summit: ${s.summit}` : label, `Tap fast  ${"●".repeat(s.taps)}${"○".repeat(Math.max(0, s.need - s.taps))}`, s.phase === "on" ? C.sage : C.clay, 1);
+        } else {
+          // stride meter: tap while the marker is in the green
+          const bw = Math.min(260, W - 60), bx = W / 2 - bw / 2, by = H - 58, m = strideMeter(s.strideT);
+          ctx.fillStyle = "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, 12, 6) : ctx.rect(bx, by, bw, 12); ctx.fill();
+          ctx.fillStyle = s.strideFx > 0 ? "rgba(91,122,106,0.85)" : "rgba(91,122,106,0.45)"; ctx.fillRect(bx + bw * 0.36, by, bw * 0.28, 12);
+          ctx.fillStyle = s.slipFx > 0 ? "#b0463a" : C.roast; ctx.fillRect(bx + bw * m - 2, by - 5, 4, 22);
+          ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = s.slipFx > 0 ? "#b0463a" : C.roast2;
+          ctx.fillText(s.slipFx > 0 ? "Slipped! Tap in the green" : s.strideFx > 0 ? "Good stride" : "Skin up: tap in the green", W / 2, by + 20);
+          ctx.textAlign = "right"; ctx.font = "500 12px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
+          ctx.fillText(`${s.climb.name} · ${Math.max(0, Math.ceil(s.climb.end - s.trav / 10))} ft to the top`, W - 16, s.mode === "race" ? 84 : 66);
+        }
+      }
+      if (s.state === "running" && s.phase === "down") {
         if (av && av.t < 2.4) banner("AVALANCHE!", "Outrun it. Jump the snowballs.", "#b0463a", 0.65 + 0.35 * Math.sin(av.t * 14));
         else if (s.cpT > 0) banner(s.cpMsg.split(" · ")[0], s.cpMsg.split(" · ")[1], C.sage, Math.min(1, s.cpT * 2));
         else if (s.tierT > 0) banner(TIERS[s.tier].split(" · ")[0], TIERS[s.tier].split(" · ")[1], C.clay, Math.min(1, s.tierT * 2));
         else if (s.onIce) banner("Ice!", "No grip: you can't jump on ice", "#4f7f99", 0.9);
+        else if (s.climb && s.trav / 10 > s.climb.start - 90) banner(`Skin track ahead`, `Climb to ${s.climb.name}`, C.sage, 0.9);
       }
       if (s.state !== "running") {
         ctx.textAlign = "center";
@@ -678,6 +757,7 @@ export function Drift() {
         <li><b>Controls:</b> <span className="hide-narrow">space or ↑ to jump (hold for more air), ↓ to duck on the ground or spin in the air.</span><span className="show-narrow">Jump, and Duck / Spin (spins when you're in the air).</span></li>
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
         <li><b>Kickers</b> are where the points are: big air and spins (↓ in the air off a kicker) score, but land mid-spin and you lose coffee.</li>
+        <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
         <li><b>Race day</b> is the same course for everyone today: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
       </ul>
