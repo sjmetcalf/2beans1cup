@@ -1,0 +1,23 @@
+{
+  "name": "2beans1cup",
+  "short_name": "2beans1cup",
+  "description": "Two beans, one cup. Training together for the Grand Traverse Triple Crown.",
+  "id": "/",
+  "start_url": "/#/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4ede3",
+  "theme_color": "#f4ede3",
+  "categories": ["sports", "health", "fitness"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Pour Log", "url": "/#/pour-log", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Side by Side", "url": "/#/side-by-side", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Free Time", "url": "/#/free-time", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

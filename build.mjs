@@ -35,5 +35,8 @@ if (watch) {
     .replace(/\/assets\/app\.css(\?v=[\w]+)?/, `/assets/app.css?v=${hash}`)
     .replace(/\/assets\/app\.js(\?v=[\w]+)?/, `/assets/app.js?v=${hash}`);
   writeFileSync("public/index.html", html);
+  // New build -> new service-worker version, so installed apps pick up the update
+  const sw = readFileSync("public/sw.js", "utf8").replace(/const VERSION = "[^"]*";/, `const VERSION = "${hash}";`);
+  writeFileSync("public/sw.js", sw);
   console.log(`index.html stamped v=${hash}`);
 }
