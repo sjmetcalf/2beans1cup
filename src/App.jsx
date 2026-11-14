@@ -74,7 +74,6 @@ function Nav({ route }) {
   return (
     <header className="nav" ref={headerRef}>
       <a href="#/" className="nav-brand" aria-label="2beans1cup home">
-        <img className="nav-mark" src="/assets/beans-mark-cream.webp" alt="" width="240" height="198" />
         <span className="wordmark">2beans<span className="wordmark-1">1</span>cup</span>
       </a>
       <a href="#/barista" className={`nav-account ${route === "/barista" ? "is-active" : ""}`} aria-label={code ? "Barista settings (you're behind the bar)" : "Barista settings"}>
@@ -112,11 +111,13 @@ export function App() {
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <Badge size={72} spin={false} />
-          <div>
-            <p className="footer-title">2beans1cup</p>
-            <p className="muted">Small-batch training for the Grand Traverse Triple Crown. Crested Butte ⇄ Aspen.</p>
-          </div>
+          <Badge size={232} className="footer-badge" />
+          <p className="footer-line">Two beans. One cup. Three races.</p>
+          <p className="muted footer-sub">Small-batch training for the Grand Traverse Triple Crown · Crested Butte ⇄ Aspen</p>
+          <nav className="footer-links" aria-label="Footer">
+            {NAV.map((n) => <a key={n.to} href={`#${n.to}`}>{n.label}</a>)}
+            <a href="#/barista">Barista</a>
+          </nav>
           <p className="muted footer-meta">Ski · Run · Bike · Espresso</p>
         </div>
       </footer>
