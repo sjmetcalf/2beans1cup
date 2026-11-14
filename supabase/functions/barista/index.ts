@@ -232,6 +232,51 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
+      // ---------- Private free/busy (never readable without the barista code) ----------
+      case "busy.replace": {
+        const blocks = Array.isArray(body.blocks) ? body.blocks : [];
+        if (blocks.length > 10000) return json({ error: "Too many busy blocks in one upload." }, 400);
+        const rows = [];
+        for (const b of blocks) {
+          const s = new Date(b?.s), e = new Date(b?.e);
+          if (isNaN(+s) || isNaN(+e) || e <= s) continue;
+          rows.push({ person_id: body.person_id, starts_at: s.toISOString(), ends_at: e.toISOString(), all_day: !!b.all_day });
+        }
+        const { error: delErr } = await db.from("busy_blocks").delete().eq("person_id", body.person_id);
+        if (delErr) throw delErr;
+        for (let i = 0; i < rows.length; i += 1000) {
+          const { error } = await db.from("busy_blocks").insert(rows.slice(i, i + 1000));
+          if (error) throw error;
+        }
+        const { error: upErr } = await db.from("busy_uploads").upsert({
+          person_id: body.person_id,
+          uploaded_at: new Date().toISOString(),
+          range_start: body.range_start ?? null,
+          range_end: body.range_end ?? null,
+          block_count: rows.length,
+        });
+        if (upErr) throw upErr;
+        return json({ ok: true, saved: rows.length });
+      }
+
+      case "busy.list": {
+        const from = new Date(body.from ?? Date.now() - 7 * 864e5).toISOString();
+        const to = new Date(body.to ?? Date.now() + 60 * 864e5).toISOString();
+        const { data: blocks, error } = await db.from("busy_blocks")
+          .select("person_id, starts_at, ends_at, all_day")
+          .lt("starts_at", to).gt("ends_at", from).order("starts_at").limit(10000);
+        if (error) throw error;
+        const { data: uploads, error: e2 } = await db.from("busy_uploads").select("*");
+        if (e2) throw e2;
+        return json({ ok: true, blocks, uploads });
+      }
+
+      case "busy.clear": {
+        await db.from("busy_blocks").delete().eq("person_id", body.person_id);
+        await db.from("busy_uploads").delete().eq("person_id", body.person_id);
+        return json({ ok: true });
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
