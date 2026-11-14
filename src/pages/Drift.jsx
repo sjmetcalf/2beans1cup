@@ -4,15 +4,15 @@ import { select, barista, loadPeople } from "../api.js";
 import { useBaristaCode } from "../hooks.js";
 import { fmtDay } from "../format.js";
 import * as audio from "../driftAudio.js";
+import * as rpg from "../driftRpg.js";
 
 // Doppio Drift: a downhill runner. The latte-art cup skis the Elk Mountains. Endless mode chases
-// distance; Race day is one fixed seeded course (race date) (Crested Butte to Aspen) against the clock.
+// distance, and every run banks beans and XP for barista levels and gear from the hut shop.
 // Everything is drawn on one canvas, no images.
 
 const C = { crema: "#f4ede3", paper: "#fbf8f3", roast: "#2b1d14", roast2: "#4a3628", muted: "#7a6a5c", clay: "#b4683f", sage: "#5b7a6a", coffee: "#b47c52", milk: "#fbf6ee", snow: "#fffdf9" };
 const BEST_KEY = "doppio.drift.best";
 const PLAYER_KEY = "doppio.drift.player";
-const MODE_KEY = "doppio.drift.mode";
 
 // Cup geometry, in the same 120-unit space as the logo (brand/build_mark.py)
 const CUP = {
@@ -194,43 +194,12 @@ function drawGate(ctx, x, g, name, finish) {
 // ---------- seeded randomness, daily course ----------
 function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const hashStr = (str) => [...str].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261);
-export const RACE_DATE = "2027-03-28"; // Grand Traverse race day: one fixed course for everyone
-export const todayDenver = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(new Date());
-
-// Race day: Crested Butte to Aspen, checkpoints with cutoffs (seconds from the start)
-const RACE_FT = 4000;
-const CHECKPOINTS = [
-  { ft: 700, name: "Brush Creek" },
-  { ft: 1400, name: "Friends Hut" },
-  { ft: 2100, name: "Star Pass" },
-  { ft: 2900, name: "Taylor Pass" },
-  { ft: 3400, name: "Barnard Hut" },
-];
-// Skin climbs: skins on at the bottom, stride up, skins off at the pass
-const RACE_CLIMBS = [{ start: 1800, end: 2100, name: "Star Pass" }, { start: 2600, end: 2900, name: "Taylor Pass" }];
 const ENDLESS_PASSES = ["Star Pass", "Taylor Pass", "Pearl Pass", "Copper Pass", "East Maroon Pass", "Triangle Pass", "Conundrum Pass", "Electric Pass"];
-const CLIMB_REF_V = 190, TRANSITION_REF = 1.4; // a decent pace on the skin track, used for cutoffs
 const CLIMB_SLOPE = 0.18;
 const STRIDE_PERIOD = 1.2; // seconds per sweep = two beats of the theme (quarter = 100 bpm)
 const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / STRIDE_PERIOD) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
 const TIER_FT = 1000;
 const baseSpeed = (runT, tier) => Math.min(860, 360 + 9 * runT) + 45 * tier;
-// Cutoffs come from a clean, hit-free run plus a small margin
-(() => {
-  let t = 0, trav = 0; const dt = 1 / 120; const marks = [...CHECKPOINTS.map((c) => c.ft), RACE_FT];
-  const times = [], climbs = RACE_CLIMBS.map((c) => ({ ...c }));
-  while (trav / 10 < RACE_FT) {
-    const ft = trav / 10, c = climbs[0];
-    if (c && ft >= c.start && !c.on) { c.on = true; t += TRANSITION_REF; }
-    const climbing = c && c.on && ft < c.end;
-    if (c && c.on && ft >= c.end) { climbs.shift(); t += TRANSITION_REF; }
-    const tier = Math.min(4, Math.floor(ft / TIER_FT));
-    trav += (climbing ? CLIMB_REF_V : baseSpeed(t, tier)) * dt; t += dt;
-    while (marks.length && trav / 10 >= marks[0]) { marks.shift(); times.push(t); }
-  }
-  CHECKPOINTS.forEach((c, i) => (c.cutoff = Math.ceil(times[i] * 1.08 + 2)));
-})();
-
 const TIERS = [
   "",
   "Tier 1 · Steeper. Ravens, ice and tree wells.",
@@ -240,14 +209,13 @@ const TIERS = [
 ];
 const DMG = { pine: 0.34, rock: 0.34, raven: 0.34, ball: 0.3, moose: 0.5, well: 0.5 };
 
-function newGame(W, mode, course) {
-  const seed = mode === "race" ? hashStr(`doppio-${course}`) : (Math.random() * 2 ** 32) >>> 0;
+function newGame(W) {
   return {
-    mode, course, rng: mulberry32(seed), state: "ready", t: 0, runT: 0, dist: 0, trav: 0, speed: 360, y: 0, vy: 0,
+    rng: mulberry32((Math.random() * 2 ** 32) >>> 0), state: "ready", t: 0, runT: 0, dist: 0, trav: 0, speed: 360, y: 0, vy: 0,
     ducking: false, obstacles: [], nextIn: W * 0.9, flakes: [], spill: [], spray: [], splash: [],
-    aval: null, nextAval: 1200 + (mode === "race" ? 300 : 0), tier: 0, tierT: 0, fill: 1, inv: 0, slowT: 0,
-    spin: null, spins: 0, cam: 0, raceT: 0, raceBonus: 0, cpNext: 0, cpMsg: null, cpT: 0, finishSpawned: false,
-    phase: "down", climb: mode === "race" ? { ...RACE_CLIMBS[0] } : { start: 1200, end: 1450, name: ENDLESS_PASSES[0] }, climbN: 0,
+    aval: null, nextAval: 1200, tier: 0, tierT: 0, fill: 1, inv: 0, slowT: 0,
+    spin: null, spins: 0, cam: 0, beansGot: 0, passes: 0, tricks: 0, summary: null,
+    phase: "down", climb: { start: 1200, end: 1450, name: ENDLESS_PASSES[0] }, climbN: 0,
     climbV: 0, strideT: 0, taps: 0, need: 0, transT: 0, slopeCur: null,
   };
 }
@@ -256,15 +224,11 @@ export function Drift() {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
-  const course = RACE_DATE;
-  const [mode, setMode] = useState(() => { try { return localStorage.getItem(MODE_KEY) === "race" ? "race" : "endless"; } catch { return "endless"; } });
-  const modeRef = useRef(mode);
-  const raceKey = `doppio.drift.race.${course}`;
+  const [prog, setProg] = useState(rpg.load);
+  const progRef = useRef(prog);
   const [best, setBest] = useState(() => { try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch { return 0; } });
-  const [bestRace, setBestRace] = useState(() => { try { return Number(localStorage.getItem(raceKey)) || 0; } catch { return 0; } });
   const [state, setState] = useState("ready");
   const bestRef = useRef(best);
-  const bestRaceRef = useRef(bestRace);
   const onOverRef = useRef(null);
   const resetRef = useRef(null);
   const stageRef = useRef(null);
@@ -273,6 +237,7 @@ export function Drift() {
   const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 
   const enterFs = () => {
+    audio.unlock();
     fsRef.current = true; setFs(true);
     document.documentElement.classList.add("drift-lock");
     const el = wrapRef.current;
@@ -299,12 +264,6 @@ export function Drift() {
   const toggleSound = () => { audio.unlock(); const on = !soundOn; audio.setSound(on); setSoundOn(on); if (on && !musicOn) { audio.setMusic(true); setMusicOn(true); } canvasRef.current?.focus(); };
   const toggleMusic = () => { audio.unlock(); const on = !(musicOn && soundOn); if (on && !soundOn) { audio.setSound(true); setSoundOn(true); } audio.setMusic(on); setMusicOn(on); canvasRef.current?.focus(); };
 
-  const pickMode = (m) => {
-    setMode(m); modeRef.current = m; setState("ready");
-    try { localStorage.setItem(MODE_KEY, m); } catch { /* ignore */ }
-    resetRef.current?.();
-  };
-
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
     const ctx = canvas.getContext("2d");
@@ -325,7 +284,7 @@ export function Drift() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     size();
-    const fresh = () => newGame(W, modeRef.current, course);
+    const fresh = () => { const n = newGame(W); n.st = rpg.statsFor(progRef.current); return n; };
     gameRef.current = fresh();
     resetRef.current = () => { gameRef.current = fresh(); };
     const g = () => gameRef.current;
@@ -341,7 +300,7 @@ export function Drift() {
         if (s.t - (s.lastTap || 0) < 0.12) return; s.lastTap = s.t;
         syncStride(s);
         const m = strideMeter(s.strideT);
-        if (m > 0.36 && m < 0.64) { s.climbV = Math.min(280, s.climbV + 95); s.strideFx = 0.35; audio.sfx("stride"); }
+        if (Math.abs(m - 0.5) < s.st.strideWin) { s.climbV = Math.min(280, s.climbV + 95 * s.st.strideBoost); s.strideFx = 0.35; audio.sfx("stride"); }
         else { s.climbV = Math.max(40, s.climbV - 35); s.slipFx = 0.45; audio.sfx("slip"); }
       }
     };
@@ -350,7 +309,7 @@ export function Drift() {
       const s = g();
       if (s.state !== "running") { if (s.state !== "ready" && s.t < 0.5) return; start(); return; }
       if (s.phase !== "down") { tapAction(s); return; }
-      if (s.vy === 0 && !s.onIce) { s.vy = -760; s.ducking = false; s.riding = false; audio.sfx("jump"); }
+      if (s.vy === 0 && (!s.onIce || s.st.iceJump)) { s.vy = -760; s.ducking = false; s.riding = false; audio.sfx("jump"); }
     };
     const releaseJump = () => { const s = g(); if (s.vy < -360) s.vy = -360; };
     const duck = (on) => {
@@ -385,6 +344,7 @@ export function Drift() {
       jump();
     };
     const onUp = (e) => {
+      audio.unlock(); // iPhone Safari only allows sound to start on a finger lift
       const z = zones.get(e.pointerId); zones.delete(e.pointerId);
       if (z === "duck") duck(false); else releaseJump();
     };
@@ -392,6 +352,9 @@ export function Drift() {
     window.addEventListener("keyup", onKeyUp);
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointerup", onUp);
+    const lift = () => audio.unlock();
+    canvas.addEventListener("touchend", lift);
+    document.addEventListener("click", lift);
     canvas.addEventListener("pointercancel", onUp);
     const noMenu = (e) => e.preventDefault();
     canvas.addEventListener("contextmenu", noMenu);
@@ -404,8 +367,7 @@ export function Drift() {
     const say = (s, msg, t = 1.4) => { s.bonusMsg = msg; s.bonusT = t; };
     const buzz = (p) => { try { navigator.vibrate?.(p); } catch { /* not supported */ } };
     const reward = (s, ft, secs, label) => {
-      if (s.mode === "race") { s.raceBonus += secs; say(s, `${label} · −${secs.toFixed(1)}s`); }
-      else { s.dist += ft * 10; say(s, `${label} · +${ft} ft`); }
+      s.dist += ft * 10; say(s, `${label} · +${ft} ft`);
     };
 
     const beanY = (lift) => ground - Math.min(lift, ground - 44); // never above the visible sky
@@ -456,7 +418,7 @@ export function Drift() {
     const boxOf = (o) => {
       if (o.kind === "raven") return { l: o.x + 2, r: o.x + o.w - 2, t: o.y - 6, b: o.y + 6 };
       if (o.kind === "ball") return { l: o.x - o.r * 0.75, r: o.x + o.r * 0.75, t: o.by - o.r * 0.75, b: o.by + o.r * 0.75 };
-      if (o.kind === "bean") return { l: o.x - 12, r: o.x + 12, t: o.by - 14, b: o.by + 14 };
+      if (o.kind === "bean") { const m = g().st?.magnet || 0; return { l: o.x - 12 - m, r: o.x + 12 + m, t: o.by - 14 - m, b: o.by + 14 + m }; }
       if (o.kind === "moose") return { l: o.x + 6, r: o.x + o.w - 6, t: ground - o.h * 0.72, b: ground };
       return { l: o.x + o.w * 0.2, r: o.x + o.w * 0.8, t: ground - o.h + 6, b: ground };
     };
@@ -465,22 +427,21 @@ export function Drift() {
     const spillOut = (s, n) => { for (let i = 0; i < n; i++) s.splash.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 40 + Math.random() * 200, vy: -140 - Math.random() * 240, r: 1.5 + Math.random() * 3, life: 1.2 }); };
     const end = (s, how, msg) => {
       s.state = how; s.t = 0; s.endMsg = msg;
-      audio.music(false); audio.sfx(how === "finished" ? "finish" : "over");
-      if (how === "over") for (let i = 0; i < 14; i++) s.spill.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 60 + Math.random() * 220, vy: -160 - Math.random() * 260, r: 2 + Math.random() * 3.5 });
+      audio.music(false); audio.sfx("over");
+      for (let i = 0; i < 14; i++) s.spill.push({ x: cupX() + 6, y: ground + s.y - CUP_H * 0.75, vx: 60 + Math.random() * 220, vy: -160 - Math.random() * 260, r: 2 + Math.random() * 3.5 });
       setState(how);
       const ft = Math.floor(s.dist / 10);
-      if (s.mode === "endless") {
-        onOverRef.current?.({ mode: "endless", ft });
-        if (ft > bestRef.current) { bestRef.current = ft; setBest(ft); try { localStorage.setItem(BEST_KEY, String(ft)); } catch { /* ignore */ } }
-      } else if (how === "finished") {
-        const ms = Math.round((s.raceT - s.raceBonus) * 1000);
-        s.finalMs = ms;
-        onOverRef.current?.({ mode: "race", ms, course: s.course });
-        if (!bestRaceRef.current || ms < bestRaceRef.current) { bestRaceRef.current = ms; setBestRace(ms); try { localStorage.setItem(raceKey, String(ms)); } catch { /* ignore */ } }
-      }
+      onOverRef.current?.({ mode: "endless", ft });
+      if (ft > bestRef.current) { bestRef.current = ft; setBest(ft); try { localStorage.setItem(BEST_KEY, String(ft)); } catch { /* ignore */ } }
+      // bank the run: beans and XP
+      const res = rpg.settle(progRef.current, { ft, beans: s.beansGot, passes: s.passes, tricks: s.tricks });
+      progRef.current = res.next; setProg(res.next);
+      s.summary = res;
+      if (res.levelUp) setTimeout(() => audio.sfx("tier"), 700);
     };
     const damage = (s, amt, msg) => {
       if (s.inv > 0) return;
+      amt *= s.st.dmgMul;
       s.fill = Math.max(0, s.fill - amt); s.inv = 1.2; s.slowT = 1.6; spillOut(s, 8);
       buzz(s.fill <= 0.001 ? [40, 60, 80] : 35);
       if (s.fill <= 0.001) end(s, "over", "Spilled!");
@@ -499,7 +460,7 @@ export function Drift() {
       if (s.paused) { draw(s); return; }
       s.t += dt;
       if (s.state === "running") {
-        s.runT += dt; if (s.mode === "race") s.raceT += dt;
+        s.runT += dt;
         const ftPhys = s.trav / 10;
         const tier = Math.min(4, Math.floor(ftPhys / TIER_FT));
         if (tier > s.tier) { s.tier = tier; s.tierT = 2.6; audio.sfx("tier"); }
@@ -509,7 +470,7 @@ export function Drift() {
         const cl = s.climb;
         const nearClimb = !!cl && s.trav + W * 1.3 >= cl.start * 10;
         if (s.phase === "down" && cl && ftPhys >= cl.start && s.vy === 0 && s.y > -2) {
-          s.phase = "on"; s.taps = 0; s.need = 6; s.transT = 0; s.obstacles = s.obstacles.filter((o) => o.kind === "gate" || o.kind === "finish"); s.aval = null; s.ducking = false;
+          s.phase = "on"; s.taps = 0; s.need = Math.max(2, 6 - s.st.tapCut); s.transT = 0; s.obstacles = s.obstacles.filter((o) => o.kind === "gate" || o.kind === "finish"); s.aval = null; s.ducking = false;
         }
         if (s.phase === "on" || s.phase === "off") {
           s.transT += dt;
@@ -518,8 +479,8 @@ export function Drift() {
             if (s.phase === "on") { s.phase = "climb"; s.climbV = 120; s.strideT = 0; audio.sfx("skins"); say(s, `Skins on · ${secs.toFixed(1)}s`, 1.4); }
             else {
               s.phase = "down"; s.nextIn = W * 0.5; s.climbN++; audio.sfx("skins");
-              if (s.mode === "endless" && secs < 1.6) reward(s, 30, 0, `Quick transition ${secs.toFixed(1)}s`); else say(s, `Skins off · ${secs.toFixed(1)}s`, 1.4);
-              s.climb = s.mode === "race" ? (RACE_CLIMBS[s.climbN] ? { ...RACE_CLIMBS[s.climbN] } : null) : { start: cl.end + 1500, end: cl.end + 1500 + 250 + 25 * Math.min(4, s.tier), name: ENDLESS_PASSES[s.climbN % ENDLESS_PASSES.length] };
+              if (secs < 1.6) reward(s, 30, 0, `Quick transition ${secs.toFixed(1)}s`); else say(s, `Skins off · ${secs.toFixed(1)}s`, 1.4);
+              s.climb = { start: cl.end + 1500, end: cl.end + 1500 + 250 + 25 * Math.min(4, s.tier), name: ENDLESS_PASSES[s.climbN % ENDLESS_PASSES.length] };
               if (s.nextAval < ftPhys + 300) s.nextAval = ftPhys + 300;
             }
           }
@@ -527,7 +488,7 @@ export function Drift() {
         if (s.phase === "climb") {
           s.strideT += dt; syncStride(s);
           s.climbV = Math.max(55, s.climbV - 110 * dt);
-          if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = 5; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; audio.sfx("checkpoint"); }
+          if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = Math.max(2, 5 - s.st.tapCut); s.passes++; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; audio.sfx("checkpoint"); }
         }
         s.summitT = Math.max(0, (s.summitT || 0) - dt);
         s.strideFx = Math.max(0, (s.strideFx || 0) - dt); s.slipFx = Math.max(0, (s.slipFx || 0) - dt); s.tapFx = Math.max(0, (s.tapFx || 0) - dt);
@@ -567,10 +528,10 @@ export function Drift() {
           if (s.airStart != null) {
             const secs = s.t - s.airStart;
             if (secs > 0.3) audio.sfx("land");
-            if (s.spin) { s.spin = null; s.spins = 0; damage(s, 0.25, "Sketchy landing"); }
+            if (s.spin) { s.spin = null; s.spins = 0; damage(s, s.st.spinLandDmg / s.st.dmgMul, "Sketchy landing"); }
             else if (s.fromKicker) { // points only for kicker air
-              if (s.spins) { const names = ["", "360", "720", "1080", "1440"]; reward(s, 40 * s.spins, 0.3 * s.spins, `${names[Math.min(4, s.spins)]}!`); audio.sfx("trick"); }
-              else if (secs > 0.55) { reward(s, Math.round(secs * 60), secs * 0.4, `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`); audio.sfx("trick"); }
+              if (s.spins) { const names = ["", "360", "720", "1080", "1440"]; reward(s, Math.round(40 * s.spins * s.st.trickMul), 0, `${names[Math.min(4, s.spins)]}!`); s.tricks++; audio.sfx("trick"); }
+              else if (secs > 0.55) { reward(s, Math.round(secs * 60 * s.st.trickMul), 0, `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`); s.tricks++; audio.sfx("trick"); }
             }
             s.spins = 0; s.fromKicker = false;
           }
@@ -601,28 +562,12 @@ export function Drift() {
         for (const o of s.obstacles) {
           if (["kicker", "ice", "well", "gate", "finish"].includes(o.kind)) continue;
           if (!overlap(box, boxOf(o))) continue;
-          if (o.kind === "bean") { o.taken = true; s.fill = Math.min(1, s.fill + 0.2); audio.sfx("bean"); reward(s, 25, 0.2, "Espresso bean · +20% coffee"); continue; }
+          if (o.kind === "bean") { o.taken = true; s.beansGot++; s.fill = Math.min(1, s.fill + s.st.beanFill); audio.sfx("bean"); reward(s, 25, 0, `Espresso bean · +${Math.round(s.st.beanFill * 100)}% coffee`); continue; }
           if (s.inv > 0 || o.hit) continue;
           o.hit = true; damage(s, DMG[o.kind] || 0.34, { pine: "Clipped a pine", rock: "Rock!", raven: "Raven!", ball: "Snowball!", moose: "Moose!" }[o.kind]);
           if (s.state !== "running") break;
         }
 
-        // race day: checkpoints, cutoffs, finish
-        if (s.mode === "race" && s.state === "running") {
-          const lead = (W - cx) + 40;
-          CHECKPOINTS.forEach((c, i) => {
-            if (!s[`cp${i}`] && s.trav + lead >= c.ft * 10) { s[`cp${i}`] = true; s.obstacles.push({ kind: "gate", name: c.name, x: cx + (c.ft * 10 - s.trav), w: 99, h: 0, cp: i }); }
-          });
-          if (!s.finishSpawned && s.trav + lead >= RACE_FT * 10) { s.finishSpawned = true; s.obstacles.push({ kind: "finish", name: "Aspen · Finish", x: cx + (RACE_FT * 10 - s.trav), w: 123, h: 0 }); }
-          const raceTime = s.raceT - s.raceBonus;
-          while (s.cpNext < CHECKPOINTS.length && s.trav / 10 >= CHECKPOINTS[s.cpNext].ft) {
-            const c = CHECKPOINTS[s.cpNext];
-            if (raceTime > c.cutoff) { end(s, "over", `Missed the ${c.name} cutoff`); break; }
-            s.cpMsg = `${c.name} · ${raceTime.toFixed(1)}s (cutoff ${c.cutoff}s)`; s.cpT = 2.2; s.cpNext++; audio.sfx("checkpoint");
-          }
-          if (s.state === "running" && s.trav / 10 >= RACE_FT) end(s, "finished", "Aspen!");
-          s.cpT = Math.max(0, s.cpT - dt);
-        }
       }
       s.spill.forEach((p) => { p.vy += 900 * dt; p.x += p.vx * dt; p.y = Math.min(ground - 1, p.y + p.vy * dt); if (p.y >= ground - 1) p.vx *= 0.9; });
       s.splash.forEach((p) => { p.life -= dt; p.vy += 900 * dt; p.x += p.vx * dt; p.y = Math.min(ground - 1, p.y + p.vy * dt); });
@@ -722,30 +667,18 @@ export function Drift() {
       // coffee meter, top left
       ctx.textBaseline = "top"; ctx.textAlign = "left";
       ctx.font = "600 11px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
-      ctx.fillText(s.tier > 0 ? `COFFEE · TIER ${s.tier}` : "COFFEE", 16, 16);
+      ctx.fillText(`COFFEE · LV ${s.st.level}${s.tier > 0 ? ` · TIER ${s.tier}` : ""}`, 16, 16);
       const mw = Math.min(120, W * 0.28), low = s.fill < 0.35;
       ctx.fillStyle = "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(16, 32, mw, 10, 5) : ctx.rect(16, 32, mw, 10); ctx.fill();
       ctx.fillStyle = low && Math.floor(s.t * 4) % 2 ? "#b0463a" : C.coffee;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(16, 32, Math.max(0, mw * s.fill), 10, 5) : ctx.rect(16, 32, mw * s.fill, 10); ctx.fill();
 
       ctx.textAlign = "right";
-      if (s.mode === "race") {
-        const raceTime = s.state === "finished" ? s.finalMs / 1000 : Math.max(0, s.raceT - s.raceBonus);
-        ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
-        ctx.fillText(bestRaceRef.current ? `TODAY'S BEST ${(bestRaceRef.current / 1000).toFixed(1)}S` : "RACE DAY", W - 16, 16);
-        ctx.font = "italic 800 26px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast;
-        ctx.fillText(`${raceTime.toFixed(1)}s`, W - 16, 34);
-        const next = CHECKPOINTS[s.cpNext];
-        ctx.font = "500 12px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
-        const toGo = Math.max(0, Math.ceil(RACE_FT - s.trav / 10));
-        ctx.fillText(next ? `${next.name} by ${next.cutoff}s · ${toGo.toLocaleString()} ft to Aspen` : `${toGo.toLocaleString()} ft to Aspen`, W - 16, 66);
-      } else {
-        ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
-        ctx.fillText(`BEST ${bestRef.current.toLocaleString()} FT`, W - 16, 16);
-        ctx.font = "italic 800 26px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast;
-        ctx.fillText(`${Math.floor(s.dist / 10).toLocaleString()} ft`, W - 16, 34);
-      }
-      const msgY = (s.mode === "race" ? 84 : 66) + (s.phase === "climb" ? 22 : 0); // drop below the climb line
+      ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
+      ctx.fillText(`BEST ${bestRef.current.toLocaleString()} FT`, W - 16, 16);
+      ctx.font = "italic 800 26px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast;
+      ctx.fillText(`${Math.floor(s.dist / 10).toLocaleString()} ft`, W - 16, 34);
+      const msgY = 66 + (s.phase === "climb" ? 22 : 0); // drop below the climb line
       if (s.bonusT > 0 && s.state === "running") {
         ctx.globalAlpha = Math.min(1, s.bonusT * 2);
         ctx.font = "italic 800 17px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
@@ -783,14 +716,14 @@ export function Drift() {
           ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = bad ? "#b0463a" : C.roast2;
           ctx.fillText(bad ? "Slipped! Tap in the green" : s.strideFx > 0 ? "Good stride" : "Skin up: tap in the green", ccx, ccy + r + 22);
           ctx.textAlign = "right"; ctx.font = "500 12px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
-          ctx.fillText(`${s.climb.name} · ${Math.max(0, Math.ceil(s.climb.end - s.trav / 10))} ft to the top`, W - 16, s.mode === "race" ? 84 : 66);
+          ctx.fillText(`${s.climb.name} · ${Math.max(0, Math.ceil(s.climb.end - s.trav / 10))} ft to the top`, W - 16, 66);
         }
       }
       if (s.state === "running" && s.phase === "down") {
         if (av && av.t < 2.4) banner("AVALANCHE!", "Outrun it. Jump the snowballs.", "#b0463a", 0.65 + 0.35 * Math.sin(av.t * 14));
         else if (s.cpT > 0) banner(s.cpMsg.split(" · ")[0], s.cpMsg.split(" · ")[1], C.sage, Math.min(1, s.cpT * 2));
         else if (s.tierT > 0) banner(TIERS[s.tier].split(" · ")[0], TIERS[s.tier].split(" · ")[1], C.clay, Math.min(1, s.tierT * 2));
-        else if (s.onIce) banner("Ice!", "No grip: you can't jump on ice", "#4f7f99", 0.9);
+        else if (s.onIce) banner("Ice!", s.st.iceJump ? "Sharp edges: you can still jump" : "No grip: you can't jump on ice", "#4f7f99", 0.9);
         else if (s.climb && s.trav / 10 > s.climb.start - 90) banner(`Skin track ahead`, `Climb to ${s.climb.name}`, C.sage, 0.9);
       }
       // first seconds of a touch run: show the two tap zones
@@ -812,25 +745,27 @@ export function Drift() {
       }
       if (s.state !== "running") {
         ctx.textAlign = "center";
-        const by = H * 0.58, bw = Math.min(360, W - 32);
-
-        ctx.fillStyle = "rgba(251,248,243,0.9)";
-        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - 12, bw, 84, 14) : ctx.rect(W / 2 - bw / 2, by - 12, bw, 84); ctx.fill();
-        ctx.fillStyle = s.state === "finished" ? C.sage : C.roast; ctx.font = "italic 800 28px 'Inter Display', Inter, system-ui, sans-serif";
-        const title = s.state === "ready" ? (s.mode === "race" ? "Race day" : "Doppio Drift") : s.state === "finished" ? `Aspen in ${(s.finalMs / 1000).toFixed(1)}s` : s.endMsg || "Spilled!";
-        ctx.fillText(title, W / 2, by);
+        const sum = s.state !== "ready" && s.summary;
+        const by = H * (sum ? 0.5 : 0.58), bw = Math.min(360, W - 32), bh = sum ? (sum.levelUp ? 150 : 124) : 84;
+        ctx.fillStyle = "rgba(251,248,243,0.92)";
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - 12, bw, bh, 14) : ctx.rect(W / 2 - bw / 2, by - 12, bw, bh); ctx.fill();
+        ctx.fillStyle = C.roast; ctx.font = "italic 800 28px 'Inter Display', Inter, system-ui, sans-serif";
+        ctx.fillText(s.state === "ready" ? "Doppio Drift" : s.endMsg || "Spilled!", W / 2, by);
+        let y = by + 42;
+        if (sum) {
+          ctx.font = "700 15px Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
+          ctx.fillText(`${Math.floor(s.dist / 10).toLocaleString()} ft · +${sum.gained.beans} beans · +${sum.gained.xp} XP`, W / 2, y); y += 26;
+          if (sum.levelUp) { ctx.fillStyle = C.sage; ctx.fillText(`Level up! Level ${sum.levelUp}, ${rpg.titleOf(sum.levelUp)}`, W / 2, y); y += 26; }
+        }
         ctx.font = "500 14px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
-        const sub = s.state === "ready"
-          ? (s.mode === "race" ? "Crested Butte to Aspen. Tap or press space to start" : "Tap or press space to drop in")
-          : s.mode === "race" ? "Tap or press space to race again" : "Tap or press space to pour another";
-        ctx.fillText(sub, W / 2, by + 42);
+        ctx.fillText(s.state === "ready" ? "Tap or press space to drop in" : "Tap or press space to pour another", W / 2, y);
       }
     };
     raf = requestAnimationFrame(step);
     return () => {
       cancelAnimationFrame(raf); ro.disconnect();
       window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp);
-      canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointercancel", onUp); canvas.removeEventListener("contextmenu", noMenu);
+      canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointercancel", onUp); canvas.removeEventListener("contextmenu", noMenu); canvas.removeEventListener("touchend", lift); document.removeEventListener("click", lift);
       document.removeEventListener("visibilitychange", onVis);
       audio.music(false);
     };
@@ -841,10 +776,6 @@ export function Drift() {
       <Eyebrow>Between intervals</Eyebrow>
       <h1 className="page-title">Doppio Drift</h1>
       <p className="lede">Bomb the Elk Mountains in a latte. Hit kickers and spin for bonus, grab espresso beans to top up, and keep enough coffee in the cup to make it down.</p>
-      <div className="drift-modes" role="group" aria-label="Game mode">
-        <button type="button" className={`chip ${mode === "endless" ? "is-on" : ""}`} aria-pressed={mode === "endless"} onClick={() => pickMode("endless")}>Endless</button>
-        <button type="button" className={`chip ${mode === "race" ? "is-on" : ""}`} aria-pressed={mode === "race"} onClick={() => pickMode("race")}>Race day · {fmtDay(course)}</button>
-      </div>
       <div className="drift-play-row">
         <button type="button" className="btn btn-dark drift-play" onClick={enterFs}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
@@ -853,7 +784,7 @@ export function Drift() {
       </div>
       <div className={`drift-card ${fs ? "drift-fs" : ""}`} ref={wrapRef}>
         <div className="drift-stage" ref={stageRef}>
-          <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift, ${mode === "race" ? "race day" : "endless"} mode. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
+          <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
         </div>
         <div className="drift-top">
           <button type="button" className={`drift-btn ${musicOn && soundOn ? "" : "is-off"}`} onClick={toggleMusic} aria-pressed={musicOn && soundOn} aria-label="Music" title="Music">
@@ -874,15 +805,60 @@ export function Drift() {
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
         <li><b>Spin</b> with ↓ (or the left half on a phone) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
         <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
-        <li><b>Sound:</b> the theme is Bach's Goldberg Variation 1, chiptune style. Music and sound effects toggle at the top of the game. On an iPhone, flip the silent switch off to hear them.</li>
+        <li><b>Sound:</b> the theme is Bach's Goldberg Variation 1, chiptune style. Music and sound effects toggle at the top of the game. If you can't hear anything on a phone, check the volume and tap the game once more.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
-        <li><b>Race day</b> is the March 28 Grand Traverse course, the same for everyone: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>
+        <li><b>Every run pays:</b> bank the beans you grab (plus one per 250 ft), earn XP to level up your barista, and spend beans on gear at the hut.</li>
       </ul>
       <p className="muted small drift-help">
-        {mode === "race" ? <>Your best: <b>{bestRace ? `${(bestRace / 1000).toFixed(1)}s` : "no finish yet"}</b></> : <>Your best on this device: <b>{best.toLocaleString()} ft</b></>}
+        Your best on this device: <b>{best.toLocaleString()} ft</b>
       </p>
-      <Leaderboard onOverRef={onOverRef} mode={mode} course={course} />
+      <Hut prog={prog} onBuy={(id) => { const n = rpg.buy(progRef.current, id); progRef.current = n; setProg(n); if (gameRef.current && gameRef.current.state !== "running") gameRef.current.st = rpg.statsFor(n); }} />
+      <Leaderboard onOverRef={onOverRef} />
     </section>
+  );
+}
+
+function Hut({ prog, onBuy }) {
+  const lv = rpg.levelOf(prog.xp), lo = rpg.xpFor(lv), hi = rpg.xpFor(lv + 1);
+  const pct = Math.min(100, ((prog.xp - lo) / (hi - lo)) * 100);
+  return (
+    <div className="drift-hut">
+      <div className="drift-hut-head">
+        <div>
+          <h2 className="col-title">The hut</h2>
+          <p className="muted small">Level {lv} · {rpg.titleOf(lv)} · {prog.runs} {prog.runs === 1 ? "run" : "runs"}</p>
+        </div>
+        <p className="drift-beans" aria-label={`${prog.beans} beans banked`}><span className="drift-bean-ico" aria-hidden="true" />{prog.beans.toLocaleString()}<span className="muted small"> beans</span></p>
+      </div>
+      <div className="drift-xp" role="progressbar" aria-label="XP to next level" aria-valuemin={0} aria-valuemax={hi - lo} aria-valuenow={prog.xp - lo}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <p className="muted small">{(prog.xp - lo).toLocaleString()} / {(hi - lo).toLocaleString()} XP to level {lv + 1}</p>
+      <h3 className="drift-sub">Barista perks</h3>
+      <ul className="drift-perks">
+        {rpg.PERKS.map((p) => (
+          <li key={p.level} className={lv >= p.level ? "is-on" : ""}><b>Lv {p.level} · {p.name}</b><span>{p.text}</span></li>
+        ))}
+      </ul>
+      <h3 className="drift-sub">Gear shop</h3>
+      <div className="drift-shop">
+        {rpg.SHOP.map((it) => {
+          const owned = prog.owned.includes(it.id), locked = it.needs && !prog.owned.includes(it.needs), short = prog.beans < it.price;
+          return (
+            <div key={it.id} className={`tile drift-item ${owned ? "is-owned" : ""}`}>
+              <p className="tile-title"><span>{it.name}</span></p>
+              <p className="muted small">{it.text}</p>
+              {owned ? <span className="chip is-on">Owned</span> : (
+                <button type="button" className="chip" disabled={locked || short} onClick={() => onBuy(it.id)}>
+                  {locked ? `Needs ${rpg.SHOP.find((x) => x.id === it.needs).name}` : `Buy · ${it.price} beans`}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="muted small">Progress is saved on this device. New gear kicks in on your next run.</p>
+    </div>
   );
 }
 
@@ -894,50 +870,41 @@ function timeAgo(iso) {
   return fmtDay(iso.slice(0, 10));
 }
 
-function Leaderboard({ onOverRef, mode, course }) {
+function Leaderboard({ onOverRef }) {
   const code = useBaristaCode();
   const [people, setPeople] = useState([]);
   const [runs, setRuns] = useState(null);
   const [player, setPlayer] = useState(() => { try { return localStorage.getItem(PLAYER_KEY) || ""; } catch { return ""; } });
   const [note, setNote] = useState("");
-  const race = mode === "race";
-  const load = () => select("drift_scores", race
-    ? `select=id,person_id,score,time_ms,created_at&mode=eq.race&course=eq.${course}&order=time_ms.asc,created_at.asc&limit=200`
-    : "select=id,person_id,score,created_at&mode=eq.endless&order=score.desc,created_at.asc&limit=200").then(setRuns).catch(() => setRuns([]));
+  const load = () => select("drift_scores", "select=id,person_id,score,created_at&mode=eq.endless&order=score.desc,created_at.asc&limit=200").then(setRuns).catch(() => setRuns([]));
   useEffect(() => { loadPeople().then(setPeople).catch(() => {}); }, []);
-  useEffect(() => { setRuns(null); setNote(""); load(); }, [mode]);
+  useEffect(() => { load(); }, []);
   const pick = (id) => { setPlayer(id); try { localStorage.setItem(PLAYER_KEY, id); } catch { /* ignore */ } };
-  const fmt = (r) => (race ? `${(r.time_ms / 1000).toFixed(1)}s` : `${r.score.toLocaleString()} ft`);
+  const fmt = (r) => `${r.score.toLocaleString()} ft`;
 
   useEffect(() => {
     onOverRef.current = async (res) => {
       if (!code || !player) return;
       try {
-        if (res.mode === "race") {
-          await barista("drift.score", { person_id: player, mode: "race", course: res.course, time_ms: res.ms });
-          const prev = (runs || []).filter((r) => r.person_id === player)[0]?.time_ms;
-          setNote(!prev || res.ms < prev ? `New best today: ${(res.ms / 1000).toFixed(1)}s to Aspen!` : `Finish saved: ${(res.ms / 1000).toFixed(1)}s`);
-        } else {
-          if (res.ft < 1) return;
-          await barista("drift.score", { person_id: player, mode: "endless", score: res.ft });
-          const prev = (runs || []).filter((r) => r.person_id === player)[0]?.score || 0;
-          setNote(res.ft > prev ? `New personal best: ${res.ft.toLocaleString()} ft!` : `Run saved: ${res.ft.toLocaleString()} ft`);
-        }
-        if (res.mode === mode) load();
+        if (res.ft < 1) return;
+        await barista("drift.score", { person_id: player, mode: "endless", score: res.ft });
+        const prev = (runs || []).filter((r) => r.person_id === player)[0]?.score || 0;
+        setNote(res.ft > prev ? `New personal best: ${res.ft.toLocaleString()} ft!` : `Run saved: ${res.ft.toLocaleString()} ft`);
+        load();
       } catch (e) { setNote(`Couldn't save that run: ${e.message}`); }
     };
   });
 
   const byId = Object.fromEntries(people.map((p) => [p.id, p]));
   const bests = people.map((p) => ({ p, best: (runs || []).find((r) => r.person_id === p.id) }));
-  const better = (a, b) => (race ? a.time_ms < b.time_ms : a.score > b.score);
+  const better = (a, b) => a.score > b.score;
   const leader = bests.reduce((a, b) => (b.best && (!a?.best || better(b.best, a.best)) ? b : a), null);
   const top = (runs || []).slice(0, 10);
 
   return (
     <div className="drift-board">
       <div className="drift-board-head">
-        <h2 className="col-title">{race ? `Race day leaderboard · ${fmtDay(course)}` : "Leaderboard"}</h2>
+        <h2 className="col-title">Leaderboard</h2>
         {code ? (
           <div className="drift-player" role="group" aria-label="Who's playing?">
             <span className="muted small">Playing as</span>
@@ -957,8 +924,8 @@ function Leaderboard({ onOverRef, mode, course }) {
         {bests.map(({ p, best }) => (
           <div key={p.id} className={`tile drift-best ${leader && leader.p.id === p.id && best ? "is-leader" : ""}`} style={{ "--bean": p.color }}>
             <p className="tile-title"><BeanDot person={p} size={9} /><span>{p.name}</span>{leader && leader.p.id === p.id && best && <span className="chip-crown">Leader</span>}</p>
-            <p className="act-big">{best ? (race ? (best.time_ms / 1000).toFixed(1) : best.score.toLocaleString()) : "—"}<span>{race ? "s" : "ft"}</span></p>
-            <p className="muted small">{best ? `${race ? "Fastest today" : "Best run"}, ${timeAgo(best.created_at)}` : race ? "No finish today" : "No runs yet"}</p>
+            <p className="act-big">{best ? best.score.toLocaleString() : "—"}<span>ft</span></p>
+            <p className="muted small">{best ? `Best run, ${timeAgo(best.created_at)}` : "No runs yet"}</p>
           </div>
         ))}
       </div>

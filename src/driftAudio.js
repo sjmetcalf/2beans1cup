@@ -27,7 +27,17 @@ function init() {
   return ctx;
 }
 
+const SILENT = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+let primed = false;
+// Must run inside a tap or key handler. iPhones only allow it on a finger lift or click,
+// so the game calls this on touch end as well as touch start.
 export function unlock() {
+  // ask iOS to treat the game like media, so the ring/silent switch doesn't mute it
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* older browsers */ }
+  if (!primed) {
+    primed = true;
+    try { const a = new Audio(SILENT); a.setAttribute("playsinline", ""); a.play().catch(() => { primed = false; }); } catch { primed = false; }
+  }
   const c = init();
   if (c && c.state !== "running") c.resume().catch(() => {});
 }

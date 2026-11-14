@@ -2,7 +2,7 @@
 // - App shell (page, code, styles, fonts, images): served from cache, refreshed in the background.
 // - Public data reads (activities, events, people…): network first, last copy used when offline.
 // - Barista actions and private calendar data are POSTs and are never cached.
-const VERSION = "a181dd988a";
+const VERSION = "26393b6c32";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";
 const SUPABASE = "https://xtzbgwnxfkdzhysnpwyq.supabase.co";
