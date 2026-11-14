@@ -257,11 +257,14 @@ export function Drift() {
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
     const ctx = canvas.getContext("2d");
-    let W = 0, H = 0, ground = 0, slope0 = 0.25, raf = 0, last = 0;
+    let W = 0, H = 0, ground = 0, slope0 = 0.35, slopeMax = 0.45, raf = 0, last = 0;
     const size = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = wrap.clientWidth; H = W < 560 ? 340 : 420; ground = Math.round(H * 0.36);
-      slope0 = Math.min(0.3, (H * 0.5) / (W * 0.86));
+      W = wrap.clientWidth; H = W < 560 ? 400 : 480; ground = Math.round(H * (W < 560 ? 0.3 : 0.24));
+      // steepest slope that still keeps the far (right-hand) end of the run on screen
+      const cx = Math.max(64, W * 0.16);
+      slopeMax = Math.min(0.62, (H + 18 - ground) / (W - cx));
+      slope0 = Math.min(0.46, slopeMax * 0.84);
       canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
@@ -271,7 +274,7 @@ export function Drift() {
     resetRef.current = () => { gameRef.current = fresh(); };
     const g = () => gameRef.current;
     const cupX = () => Math.max(64, W * 0.16);
-    const slopeNow = (s) => Math.min(slope0 + 0.035 * s.tier, slope0 * 1.5);
+    const slopeNow = (s) => Math.min(slope0 + 0.03 * s.tier, slopeMax);
 
     const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); };
     const jump = () => {
@@ -585,12 +588,11 @@ export function Drift() {
       // coffee meter, top left
       ctx.textBaseline = "top"; ctx.textAlign = "left";
       ctx.font = "600 11px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
-      ctx.fillText("COFFEE", 16, 16);
+      ctx.fillText(s.tier > 0 ? `COFFEE · TIER ${s.tier}` : "COFFEE", 16, 16);
       const mw = Math.min(120, W * 0.28), low = s.fill < 0.35;
       ctx.fillStyle = "rgba(43,29,20,0.1)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(16, 32, mw, 10, 5) : ctx.rect(16, 32, mw, 10); ctx.fill();
       ctx.fillStyle = low && Math.floor(s.t * 4) % 2 ? "#b0463a" : C.coffee;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(16, 32, Math.max(0, mw * s.fill), 10, 5) : ctx.rect(16, 32, mw * s.fill, 10); ctx.fill();
-      if (s.tier > 0) { ctx.font = "600 11px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted; ctx.fillText(`TIER ${s.tier}`, 16, 50); }
 
       ctx.textAlign = "right";
       if (s.mode === "race") {
