@@ -402,7 +402,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Footer: the badge as a sign-off, big enough to read */
 .footer { margin-top: clamp(72px, 10vw, 128px); border-top: 1px solid var(--line); background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--clay) 7%, transparent), transparent 60%), var(--paper); }
 .footer-inner { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 7vw, 80px) clamp(20px, 5vw, 40px) 36px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
-.footer-badge { width: clamp(220px, 58vw, 248px); height: auto; margin-bottom: 18px; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55)); }
+.footer-badge { width: clamp(220px, 58vw, 248px); height: auto; margin-bottom: 6px; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55)); }
 .footer-line { font-family: var(--display); font-weight: 600; font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.03em; }
 .footer-sub { font-size: 14px; max-width: 460px; }
 .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 20px; margin: 22px 0 6px; font-size: 14px; font-weight: 500; }

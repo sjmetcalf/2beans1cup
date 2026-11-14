@@ -112,12 +112,6 @@ export function App() {
       <footer className="footer">
         <div className="footer-inner">
           <Badge size={232} className="footer-badge" />
-          <p className="footer-line">Two beans. One cup. Three races.</p>
-          <p className="muted footer-sub">Small-batch training for the Grand Traverse Triple Crown · Crested Butte ⇄ Aspen</p>
-          <nav className="footer-links" aria-label="Footer">
-            {NAV.map((n) => <a key={n.to} href={`#${n.to}`}>{n.label}</a>)}
-            <a href="#/barista">Barista</a>
-          </nav>
           <p className="muted footer-meta">Ski · Run · Bike · Espresso</p>
         </div>
       </footer>
