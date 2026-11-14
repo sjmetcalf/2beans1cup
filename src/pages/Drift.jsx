@@ -70,6 +70,30 @@ function drawRock(ctx, x, groundY, w, h) {
   ctx.beginPath(); ctx.moveTo(x + w * 0.18, groundY - h * 0.74); ctx.lineTo(x + w * 0.42, groundY - h); ctx.lineTo(x + w * 0.74, groundY - h * 0.84); ctx.lineTo(x + w * 0.5, groundY - h * 0.72); ctx.closePath(); ctx.fill();
 }
 
+// Terrain-park kicker: a snow wedge rising to a lip on its downhill (right) end
+const KICKERS = { s: { w: 70, h: 14, launch: 640 }, m: { w: 96, h: 24, launch: 830 }, l: { w: 128, h: 36, launch: 1040 } };
+function drawKicker(ctx, x, groundY, w, h) {
+  ctx.fillStyle = "#efe6da";
+  ctx.beginPath(); ctx.moveTo(x, groundY); ctx.quadraticCurveTo(x + w * 0.62, groundY - h * 0.18, x + w, groundY - h); ctx.lineTo(x + w + h * 0.35, groundY); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "rgba(43,29,20,0.18)"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(x, groundY); ctx.quadraticCurveTo(x + w * 0.62, groundY - h * 0.18, x + w, groundY - h); ctx.stroke();
+  ctx.strokeStyle = C.clay; ctx.lineWidth = 3; ctx.lineCap = "round"; // painted lip line
+  ctx.beginPath(); ctx.moveTo(x + w - 1, groundY - h + 1); ctx.lineTo(x + w + h * 0.12, groundY - h * 0.55); ctx.stroke();
+  // marker flags on the lip
+  ctx.strokeStyle = C.roast2; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x + w + 4, groundY - h); ctx.lineTo(x + w + 4, groundY - h - 18); ctx.stroke();
+  ctx.fillStyle = C.clay; ctx.beginPath(); ctx.moveTo(x + w + 4, groundY - h - 18); ctx.lineTo(x + w + 14, groundY - h - 14); ctx.lineTo(x + w + 4, groundY - h - 10); ctx.fill();
+}
+const kickerSurface = (o, x) => (x < o.x || x > o.x + o.w ? null : (() => { const t = (x - o.x) / o.w; return o.h * (2 * (1 - t) * t * 0.18 + t * t); })());
+
+function drawSnowball(ctx, x, y, r, spin) {
+  ctx.fillStyle = C.snow; ctx.strokeStyle = "rgba(122,106,92,0.45)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = "rgba(122,106,92,0.35)";
+  ctx.beginPath(); ctx.arc(x, y, r * 0.55, spin, spin + 1.6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r * 0.3, spin + 3, spin + 4.2); ctx.stroke();
+}
+
 function drawRaven(ctx, x, y, w, t) {
   const up = Math.sin(t * 14) > 0;
   ctx.fillStyle = C.roast;
@@ -114,7 +138,7 @@ function drawRidge(ctx, pts, offset, W, top, bottom, color, peaks) {
 }
 
 function newGame(W) {
-  return { state: "ready", t: 0, dist: 0, speed: 360, y: 0, vy: 0, ducking: false, obstacles: [], nextIn: W * 0.9, flakes: [], milestone: 0, flash: 0, spill: [] };
+  return { state: "ready", t: 0, dist: 0, speed: 360, y: 0, vy: 0, ducking: false, obstacles: [], nextIn: W * 0.9, flakes: [], milestone: 0, flash: 0, spill: [], spray: [], aval: null, nextAval: 700 + Math.random() * 500 };
 }
 
 export function Drift() {
@@ -130,24 +154,25 @@ export function Drift() {
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
     const ctx = canvas.getContext("2d");
-    let W = 0, H = 0, ground = 0, raf = 0, last = 0;
+    let W = 0, H = 0, ground = 0, slope = 0.25, raf = 0, last = 0;
     const size = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = wrap.clientWidth; H = W < 560 ? 240 : 300; ground = H - 44;
+      W = wrap.clientWidth; H = W < 560 ? 340 : 420; ground = Math.round(H * 0.36);
+      slope = Math.min(0.32, (H * 0.56) / (W * 0.86));
       canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     size();
     gameRef.current = newGame(W);
     const g = () => gameRef.current;
-    const cupX = () => Math.max(56, W * 0.12);
+    const cupX = () => Math.max(64, W * 0.16);
 
     const start = () => { const s = g(); if (s.state !== "running") { gameRef.current = newGame(W); gameRef.current.state = "running"; setState("running"); } };
     const jump = () => {
       const s = g();
       if (s.state === "ready" || s.state === "over") { if (s.state === "over" && s.t < 0.45) return; start(); }
       const n = g();
-      if (n.y === 0) { n.vy = -760; n.ducking = false; }
+      if (n.vy === 0) { n.vy = -760; n.ducking = false; n.riding = false; }
     };
     const releaseJump = () => { const s = g(); if (s.vy < -360) s.vy = -360; };
     const duck = (on) => { const s = g(); if (s.state !== "running") return; s.ducking = on; if (on && s.y < 0) s.vy = Math.max(s.vy, 900); };
@@ -175,6 +200,13 @@ export function Drift() {
       const r = Math.random();
       const ravens = s.dist / 10 > 500;
       let o;
+      if (Math.random() < 0.2) {
+        const size = Math.random() < 0.4 ? "s" : Math.random() < 0.6 ? "m" : "l";
+        const k = KICKERS[size];
+        s.obstacles.push({ kind: "kicker", size, x: W + 20, w: k.w, h: k.h, launch: k.launch });
+        s.nextIn = s.speed * (1.25 + (size === "l" ? 0.6 : size === "m" ? 0.35 : 0.1)) + k.w; // clear landing zone
+        return;
+      }
       if (ravens && r < 0.22) {
         const low = Math.random() < 0.5; // low raven: jump it; high raven: duck under it
         o = { kind: "raven", x: W + 20, w: 38, h: 16, y: low ? ground - 18 : ground - 54 };
@@ -191,9 +223,11 @@ export function Drift() {
       const x = cupX();
       const top = ground + s.y - (s.ducking ? CUP_H * 0.62 : CUP_H);
       const box = { l: x - CUP_W * 0.36, r: x + CUP_W * 0.42, t: top + 6, b: ground + s.y - 2 };
-      return s.obstacles.some((o) => {
+      return s.obstacles.filter((o) => o.kind !== "kicker").some((o) => {
         const ob = o.kind === "raven"
           ? { l: o.x + 2, r: o.x + o.w - 2, t: o.y - 6, b: o.y + 6 }
+          : o.kind === "ball"
+          ? { l: o.x - o.r * 0.75, r: o.x + o.r * 0.75, t: o.by - o.r * 0.75, b: o.by + o.r * 0.75 }
           : { l: o.x + o.w * 0.2, r: o.x + o.w * 0.8, t: ground - o.h + 6, b: ground };
         return box.l < ob.r && box.r > ob.l && box.t < ob.b && box.b > ob.t;
       });
@@ -206,13 +240,42 @@ export function Drift() {
       s.t += dt;
       if (s.state === "running") {
         s.speed = Math.min(900, s.speed + 9 * dt);
-        s.dist += s.speed * dt;
+        // Avalanche: warning, then a wall of snow chases you downhill for a few seconds
+        const ft0 = s.dist / 10;
+        if (!s.aval && ft0 > s.nextAval) s.aval = { t: 0, dur: 8.5, ballIn: 1.4 };
+        let mul = 1;
+        if (s.aval) {
+          const a = s.aval; a.t += dt;
+          mul = a.t < 1.2 ? 1 : 1 + 0.3 * Math.min(1, (a.t - 1.2) / 1.2);
+          a.ballIn -= dt;
+          if (a.t > 1.4 && a.t < a.dur - 1.2 && a.ballIn <= 0) {
+            const r = 9 + Math.random() * 9;
+            s.obstacles.push({ kind: "ball", x: W + 30, w: r * 2, h: r * 2, r, by: ground - r, phase: Math.random() * 6, vx: 70 + Math.random() * 90 });
+            a.ballIn = 0.7 + Math.random() * 0.8;
+          }
+          if (a.t >= a.dur) { s.aval = null; s.nextAval = ft0 + 900 + Math.random() * 700; s.bonus = 150; s.dist += 1500; s.bonusT = 1.6; s.bonusMsg = "Outran the avalanche · +150 ft"; }
+        }
+        s.mul = mul;
+        s.dist += s.speed * mul * dt;
         s.vy += (s.ducking && s.y < 0 ? 4200 : 2300) * dt;
-        s.y = Math.min(0, s.y + s.vy * dt);
-        if (s.y === 0) s.vy = 0;
-        s.obstacles.forEach((o) => (o.x -= s.speed * dt));
+        const cx = cupX();
+        const kick = s.obstacles.find((o) => o.kind === "kicker" && cx >= o.x && cx <= o.x + o.w);
+        const floor = kick ? -kickerSurface(kick, cx) : 0;
+        const wasRiding = s.riding;
+        s.y = s.y + s.vy * dt;
+        if (s.y >= floor) {
+          if (s.airStart != null && s.t - s.airStart > 0.55) { const secs = s.t - s.airStart; s.bonus = Math.round(secs * 60); s.dist += s.bonus * 10; s.bonusT = 1.2; s.bonusMsg = `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s · +${s.bonus} ft`; }
+          s.airStart = null;
+          s.y = floor; s.vy = 0; s.riding = !!kick; s.lastKick = kick || s.lastKick;
+        } else if (s.airStart == null) s.airStart = s.t;
+        if (wasRiding && !kick && s.lastKick && s.y >= -s.lastKick.h - 2) { s.vy = -s.lastKick.launch - (s.speed - 360) * 0.25; s.y = -s.lastKick.h; s.riding = false; s.airStart = s.t; }
+        s.bonusT = Math.max(0, (s.bonusT || 0) - dt);
+        s.obstacles.forEach((o) => {
+          o.x -= (s.speed * mul + (o.vx || 0)) * dt;
+          if (o.kind === "ball") { o.phase += dt * 7; o.by = ground - o.r - Math.abs(Math.sin(o.phase)) * 22; }
+        });
         s.obstacles = s.obstacles.filter((o) => o.x + o.w > -20);
-        s.nextIn -= s.speed * dt;
+        s.nextIn -= s.speed * mul * dt;
         if (s.nextIn <= 0) spawn(s);
         const ft = Math.floor(s.dist / 10);
         if (Math.floor(ft / 1000) > s.milestone) { s.milestone = Math.floor(ft / 1000); s.flash = 1; }
@@ -227,9 +290,13 @@ export function Drift() {
         setScore(ft);
       }
       s.spill.forEach((p) => { p.vy += 900 * dt; p.x += p.vx * dt; p.y = Math.min(ground - 1, p.y + p.vy * dt); if (p.y >= ground - 1) p.vx *= 0.9; });
+      // snow spray off the cup while it's carving
+      if (s.state === "running" && s.vy === 0) for (let i = 0; i < 2; i++) s.spray.push({ x: cupX() - CUP_W * 0.3, y: ground - 2, vx: -s.speed * (0.15 + Math.random() * 0.25), vy: -60 - Math.random() * 140, life: 0.45 + Math.random() * 0.25, r: 1 + Math.random() * 2 });
+      s.spray.forEach((p) => { p.life -= dt; p.vy += 500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; });
+      s.spray = s.spray.filter((p) => p.life > 0);
       // snow
       if (s.flakes.length < 40) s.flakes.push({ x: Math.random() * W, y: -5, v: 20 + Math.random() * 35, r: 0.8 + Math.random() * 1.6 });
-      s.flakes.forEach((f) => { f.y += f.v * dt; f.x -= (s.state === "running" ? s.speed * 0.25 : 12) * dt; if (f.y > ground || f.x < -5) { f.y = -5; f.x = Math.random() * W * 1.2; } });
+      s.flakes.forEach((f) => { f.y += f.v * dt; f.x -= (s.state === "running" ? s.speed * 0.25 : 12) * dt; if (f.y > H || f.x < -5) { f.y = -5; f.x = Math.random() * W * 1.2; } });
       draw(s);
     };
 
@@ -238,32 +305,66 @@ export function Drift() {
       const sky = ctx.createLinearGradient(0, 0, 0, ground);
       sky.addColorStop(0, C.paper); sky.addColorStop(1, C.crema);
       ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-      drawRidge(ctx, FAR, off * 0.08, W, H * 0.08, ground, "rgba(74,54,40,0.16)", true);
-      drawRidge(ctx, NEAR, off * 0.22, W, H * 0.42, ground, "rgba(91,122,106,0.17)", false);
-      // snowfield
-      ctx.fillStyle = C.snow; ctx.fillRect(0, ground, W, H - ground);
-      ctx.fillStyle = "rgba(122,106,92,0.18)";
-      const n = Math.round(W / 40), band = H - ground - 14;
-      for (let i = 0; i < n; i++) { const x = ((((i / n) * (W + 40) + ((i * 53) % 37) - off) % (W + 40)) + W + 40) % (W + 40) - 20; ctx.fillRect(x, ground + 8 + ((i * 7919) % 100) / 100 * band, 10 + (i % 3) * 6, 1.5); }
-      ctx.fillStyle = "rgba(43,29,20,0.22)"; ctx.fillRect(0, ground, W, 1.5);
-      // ski tracks behind the cup (gap while airborne)
+      const camY = s.cam || 0;
+      drawRidge(ctx, FAR, off * 0.06, W, H * 0.04 + camY * 0.3, H * 1.05 + camY, "rgba(74,54,40,0.16)", true);
+      drawRidge(ctx, NEAR, off * 0.16, W, H * 0.3 + camY * 0.5, H * 1.05 + camY, "rgba(91,122,106,0.17)", false);
       const x = cupX();
+      const av = s.aval;
+      const camTarget = Math.max(0, -s.y - ground + CUP_H + 34);
+      s.cam = (s.cam || 0) + (camTarget - (s.cam || 0)) * Math.min(1, 0.016 * 9 + (camTarget > (s.cam || 0) ? 0.25 : 0));
+      ctx.save(); ctx.translate(0, s.cam);
+      if (av && av.t > 1.2) { ctx.save(); ctx.translate((Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2.4); }
+      // Everything on the hill is drawn in a sheared frame: the ground tilts downhill to the right,
+      // but trees, rocks and ravens stay upright (vertical lines stay vertical).
+      ctx.save();
+      ctx.transform(1, slope, 0, 1, 0, -x * slope);
+      ctx.fillStyle = C.snow; ctx.fillRect(-W, ground, W * 3, H * 4);
+      ctx.fillStyle = "rgba(122,106,92,0.16)";
+      const n = Math.round(W / 34), band = H * 0.9;
+      for (let i = 0; i < n; i++) { const tx = ((((i / n) * (W + 60) + ((i * 53) % 37) - off) % (W + 60)) + W + 60) % (W + 60) - 30; ctx.fillRect(tx, ground + 10 + ((i * 7919) % 100) / 100 * band, 12 + (i % 3) * 7, 1.5); }
+      ctx.fillStyle = "rgba(43,29,20,0.2)"; ctx.fillRect(-W, ground, W * 3, 1.5);
+      // ski tracks uphill behind the cup (gap while airborne)
       ctx.strokeStyle = "rgba(180,104,63,0.55)"; ctx.lineWidth = 2;
-      for (const dy of [5, 11]) { ctx.beginPath(); ctx.moveTo(0, ground + dy); ctx.lineTo(s.y < -2 ? x - 40 : x - 6, ground + dy); ctx.stroke(); }
-      // obstacles
+      for (const dy of [5, 11]) { ctx.beginPath(); ctx.moveTo(-40, ground + dy); ctx.lineTo(s.y < -2 ? x - 40 : x - 6, ground + dy); ctx.stroke(); }
       s.obstacles.forEach((o) => {
         if (o.kind === "pine") drawPine(ctx, o.x, ground, o.w, o.h);
+        else if (o.kind === "kicker") drawKicker(ctx, o.x, ground, o.w, o.h);
         else if (o.kind === "rock") drawRock(ctx, o.x, ground, o.w, o.h);
+        else if (o.kind === "ball") drawSnowball(ctx, o.x, o.by, o.r, o.phase);
         else drawRaven(ctx, o.x, o.y, o.w, s.t);
       });
-      // shadow + cup
       const air = Math.min(1, -s.y / 120);
       ctx.fillStyle = `rgba(43,29,20,${0.16 * (1 - air * 0.6)})`;
       ctx.beginPath(); ctx.ellipse(x, ground + 2, CUP_W * 0.42 * (1 - air * 0.3), 4, 0, 0, Math.PI * 2); ctx.fill();
-      const tilt = s.state === "over" ? 0.5 : s.y < 0 ? Math.max(-0.35, Math.min(0.2, s.vy / 2600)) : Math.sin(s.t * 18) * 0.02;
-      drawCup(ctx, x, ground + s.y, { tilt, squash: s.ducking ? 0.62 : 1, spilled: s.state === "over" });
+      ctx.fillStyle = "rgba(196,186,174,0.85)";
+      s.spray.forEach((p) => { ctx.globalAlpha = Math.min(1, p.life * 2.5); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
       ctx.fillStyle = C.coffee;
       s.spill.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
+      // the avalanche: a churning wall of snow pouring down the slope behind the cup
+      if (av && av.t > 0.4) {
+        const k = Math.sin(Math.PI * Math.min(1, (av.t - 0.4) / (av.dur - 0.4)));
+        const front = -60 + (x - 46) * k;
+        ctx.fillStyle = "rgba(214,204,192,0.9)"; // shadowed body
+        ctx.fillRect(-W, ground - 170, front + W - 10, 172);
+        for (let i = 0; i < 14; i++) {
+          const py = ground - 175 + i * 16 + Math.sin(s.t * 6 + i) * 6;
+          const r = 26 + ((i * 17) % 18) + Math.sin(s.t * 9 + i * 2) * 5;
+          const px = front - 14 + Math.sin(s.t * 7 + i * 1.7) * 8 - (i % 3) * 10;
+          ctx.fillStyle = "rgba(196,186,174,0.95)"; ctx.beginPath(); ctx.arc(px + 4, py + 5, r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+        }
+        // powder blowing ahead of the front
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        for (let i = 0; i < 18; i++) { const px = front + 20 + ((i * 37 + s.t * 260) % 90), py = ground - 150 + ((i * 53) % 150); ctx.beginPath(); ctx.arc(px, py, 2 + (i % 3), 0, Math.PI * 2); ctx.fill(); }
+      }
+      ctx.restore();
+      if (av && av.t > 1.2) ctx.restore();
+      // the cup itself is drawn unsheared, leaning into the fall line
+      const lean = Math.atan(slope) * 0.85;
+      const tilt = s.state === "over" ? 0.9 : lean + (s.y < 0 ? Math.max(-0.35, Math.min(0.2, s.vy / 2600)) : Math.sin(s.t * 18) * 0.02);
+      drawCup(ctx, x, ground + s.y, { tilt, squash: s.ducking ? 0.62 : 1, spilled: s.state === "over" });
+      ctx.restore(); // camera
       // falling snow
       ctx.fillStyle = "rgba(255,253,249,0.95)";
       s.flakes.forEach((f) => { ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill(); });
@@ -274,9 +375,25 @@ export function Drift() {
       ctx.font = "italic 800 26px 'Inter Display', Inter, system-ui, sans-serif";
       ctx.fillStyle = s.flash > 0 ? C.clay : C.roast;
       ctx.fillText(`${Math.floor(s.dist / 10).toLocaleString()} ft`, W - 16, 34);
+      if (av && s.state === "running" && av.t < 2.4) {
+        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(av.t * 14);
+        ctx.textAlign = "center"; ctx.textBaseline = "top";
+        const wy = H * 0.55, wx = W * 0.55;
+        ctx.font = `italic 800 ${Math.min(38, Math.round(W / 10))}px 'Inter Display', Inter, system-ui, sans-serif`; ctx.fillStyle = "#b0463a";
+        ctx.fillText("AVALANCHE!", wx, wy);
+        ctx.font = "600 14px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
+        ctx.fillText("Outrun it. Jump the snowballs.", wx, wy + Math.min(44, W / 9));
+        ctx.globalAlpha = 1;
+      }
+      if (s.bonusT > 0 && s.state === "running") {
+        ctx.textAlign = "right"; ctx.globalAlpha = Math.min(1, s.bonusT * 2);
+        ctx.font = "italic 800 18px 'Inter Display', Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
+        ctx.fillText(s.bonusMsg || "", W - 16, 66);
+        ctx.globalAlpha = 1;
+      }
       if (s.state !== "running") {
         ctx.textAlign = "center";
-        const by = Math.max(H * 0.28, 78), bw = Math.min(340, W - 32);
+        const by = H * 0.6, bw = Math.min(340, W - 32);
         ctx.fillStyle = "rgba(251,248,243,0.86)";
         ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - 12, bw, 80, 14) : ctx.rect(W / 2 - bw / 2, by - 12, bw, 80); ctx.fill();
         ctx.fillStyle = C.roast; ctx.font = "italic 800 30px 'Inter Display', Inter, system-ui, sans-serif";
@@ -299,7 +416,7 @@ export function Drift() {
     <section className="section section-first drift-page">
       <Eyebrow>Between intervals</Eyebrow>
       <h1 className="page-title">Doppio Drift</h1>
-      <p className="lede">Ski the Elk Mountains in a latte. Jump the pines and rocks, duck the ravens, and don't spill.</p>
+      <p className="lede">Bomb the Elk Mountains in a latte. Hit the kickers for big air, jump the pines, rocks and snowballs, duck the ravens, outrun the avalanches, and don't spill.</p>
       <div className="drift-card" ref={wrapRef}>
         <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift game. ${state === "running" ? `${score} feet` : "Press space or tap to start."}`} />
       </div>
