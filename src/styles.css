@@ -742,3 +742,15 @@ html.drift-lock, html.drift-lock body { overflow: hidden; overscroll-behavior: n
 
 .footer-meta { white-space: nowrap; }
 @media (max-width: 520px) { .footer-meta { letter-spacing: 0.16em; font-size: 10.5px; } }
+
+/* phones held sideways: ask to turn upright (iPhone can't lock orientation) */
+.drift-rotate { display: none; }
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  .drift-card { position: relative; }
+  .drift-rotate { display: flex; position: absolute; inset: 0; z-index: 3; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: var(--paper); color: var(--roast); text-align: center; padding: 20px; }
+  .drift-rotate p { font-family: var(--display); font-weight: 800; font-style: italic; font-size: 22px; margin: 0; }
+  .drift-rotate svg { animation: drift-turn 1.8s ease-in-out infinite; }
+}
+@keyframes drift-turn { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
+@media (prefers-reduced-motion: reduce) { .drift-rotate svg { animation: none; } }

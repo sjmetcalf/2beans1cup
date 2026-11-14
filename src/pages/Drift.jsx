@@ -274,7 +274,10 @@ export function Drift() {
     fsRef.current = true; setFs(true);
     document.documentElement.classList.add("drift-lock");
     const el = wrapRef.current;
-    try { el?.requestFullscreen?.({ navigationUI: "hide" })?.catch?.(() => {}); } catch { /* iPhone Safari: fixed overlay instead */ }
+    try {
+      const req = el?.requestFullscreen?.({ navigationUI: "hide" });
+      req?.then?.(() => screen.orientation?.lock?.("portrait").catch(() => {})).catch?.(() => {});
+    } catch { /* iPhone Safari: fixed overlay instead */ }
     setTimeout(() => canvasRef.current?.focus(), 50);
   };
   const exitFs = () => {
@@ -479,6 +482,8 @@ export function Drift() {
       const s = g();
       // drop to 1x pixels if the phone can't keep up
       if (dt > 0 && dprCap > 1) { s.slowFrames = (s.slowFrames || 0) * 0.97 + (dt > 0.024 ? 1 : 0); if (s.slowFrames > 20) { dprCap = 1; size(); } }
+      const sideways = touch && window.innerWidth > window.innerHeight && window.innerHeight < 520;
+      if (sideways && s.state === "running") s.paused = true;
       if (s.paused) { draw(s); return; }
       s.t += dt;
       if (s.state === "running") {
@@ -786,10 +791,7 @@ export function Drift() {
       if (s.state !== "running") {
         ctx.textAlign = "center";
         const by = H * 0.58, bw = Math.min(360, W - 32);
-        if (fsRef.current && touch && H > W * 1.2 && s.state === "ready") {
-          ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
-          ctx.fillText("Tip: turn your phone sideways for a longer view of the slope", W / 2, by + 96, W - 32);
-        }
+
         ctx.fillStyle = "rgba(251,248,243,0.9)";
         ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - 12, bw, 84, 14) : ctx.rect(W / 2 - bw / 2, by - 12, bw, 84); ctx.fill();
         ctx.fillStyle = s.state === "finished" ? C.sage : C.roast; ctx.font = "italic 800 28px 'Inter Display', Inter, system-ui, sans-serif";
@@ -831,6 +833,10 @@ export function Drift() {
           <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift, ${mode === "race" ? "race day" : "endless"} mode. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
         </div>
         {fs && <button type="button" className="drift-exit" onClick={exitFs} aria-label="Exit full screen">✕</button>}
+        <div className="drift-rotate" role="status">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
+          <p>Turn your phone upright to keep playing</p>
+        </div>
       </div>
       <ul className="drift-rules muted small">
         <li><b>Controls:</b> <span className="hide-narrow">space or ↑ to jump (hold for more air), ↓ to duck on the ground or spin in the air.</span><span className="show-narrow">tap the right half to jump (hold for more air), the left half to duck, or to spin in the air.</span></li>
