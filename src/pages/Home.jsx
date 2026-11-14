@@ -219,11 +219,11 @@ export function Home() {
     <>
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Est. 2026 · Crested Butte ⇄ Aspen</p>
-          <BlurText as="h1" text="Two beans. One cup. Three races." className="hero-title" />
+          <p className="eyebrow">The Fast &amp; the Caffeinated<span className="hide-narrow"> · Elk Mountain Drift</span></p>
+          <BlurText as="h1" text={"Two shots.\nNo brakes.\nThree races."} className="hero-title" />
           <p className="hero-lede">
-            A small-batch training house for two athletes chasing the Grand Traverse Triple Crown: a ski, a run and a bike
-            across the Elk Mountains, all in one season.
+            Two drifters, one doppio, and the Grand Traverse Triple Crown: 40 miles from Crested Butte to Aspen on skis in
+            March, then again on foot and on wheels in September.
           </p>
           <div className="hero-actions">
             <a className="btn btn-dark" href="#/side-by-side">Compare our pours</a>
@@ -236,7 +236,7 @@ export function Home() {
         </div>
       </section>
 
-      <Marquee items={["Ski", "Run", "Bike", "Espresso", "Elk Mountains", "Star Pass", "Pearl Pass", "Flat white", "Vert", "Cortado"]} />
+      <Marquee items={["Doppio", "Ski", "Drift", "Run", "Ristretto", "Bike", "Star Pass", "No brakes", "Pearl Pass", "Vert", "Cortado"]} />
 
       <section className="section">
         <SectionHead eyebrow="Fresh off the bar" title="The last 30 days." />

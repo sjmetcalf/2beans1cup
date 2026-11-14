@@ -1,8 +1,8 @@
-// 2beans1cup service worker: opens instantly and works with no signal.
+// Doppio Drifters service worker: opens instantly and works with no signal.
 // - App shell (page, code, styles, fonts, images): served from cache, refreshed in the background.
 // - Public data reads (activities, events, people…): network first, last copy used when offline.
 // - Barista actions and private calendar data are POSTs and are never cached.
-const VERSION = "6f14e644ad";
+const VERSION = "b01f640e0a";
 const SHELL = `shell-${VERSION}`;
 const DATA = "data-v1";
 const SUPABASE = "https://xtzbgwnxfkdzhysnpwyq.supabase.co";
@@ -12,7 +12,7 @@ self.addEventListener("install", (event) => {
     const cache = await caches.open(SHELL);
     const html = await (await fetch("/", { cache: "no-cache" })).text();
     const assets = [...html.matchAll(/(?:href|src)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
-    await cache.addAll(["/", "/manifest.webmanifest", "/favicon.svg", "/icons/icon-192.png", "/assets/beans-roast.webp", ...assets]);
+    await cache.addAll(["/", "/manifest.webmanifest", "/favicon.svg", "/icons/icon-192.png", ...assets]);
     await self.skipWaiting();
   })());
 });

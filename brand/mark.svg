@@ -1,14 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="2beans1cup">
-  <!-- Simple app-icon mark: two beans in a cup. Bold strokes so it reads at 16–32px. -->
-  <rect width="64" height="64" rx="14" fill="#f4ede3"/>
-  <g transform="rotate(-14 23 24)">
-    <ellipse cx="23" cy="24" rx="7.2" ry="10" fill="#b4683f"/>
-    <path d="M23 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#f4ede3" stroke-width="2.2" stroke-linecap="round"/>
-  </g>
-  <g transform="rotate(14 37 24)">
-    <ellipse cx="37" cy="24" rx="7.2" ry="10" fill="#5b7a6a"/>
-    <path d="M37 15.5c-2.6 3.2-2.6 5.5 0 8.5s2.6 5.3 0 8.5" fill="none" stroke="#f4ede3" stroke-width="2.2" stroke-linecap="round"/>
-  </g>
-  <path d="M12 30.5h36v6.5a18 18 0 0 1-18 18h0a18 18 0 0 1-18-18z" fill="#f4ede3" stroke="#2b1d14" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M48 34.5a6.5 6.5 0 0 1 0 13" fill="none" stroke="#2b1d14" stroke-width="4" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="26" fill="#f4ede3"/>
+  <!-- a doppio from above: handle, cup, crema -->
+  <path d="M91 52 h11 a8 8 0 0 1 0 16 h-11 z" fill="#2b1d14"/>
+  <circle cx="56" cy="60" r="40" fill="#2b1d14"/>
+  <circle cx="56" cy="60" r="34.5" fill="#8a5530"/>
+  <!-- milk foam = the snowfield -->
+  <circle cx="56" cy="60" r="29" fill="#f8f2e8"/>
+  <clipPath id="dd-foam"><circle cx="56" cy="60" r="29"/></clipPath>
+  <!-- latte art: two skiers' tracks (clay + sage) weaving figure-eights down the foam -->
+  <g clip-path="url(#dd-foam)" fill="none" stroke-linecap="round"><g transform="rotate(-24 56 60)"><path d="M56.00 20.00 C67.31 25.47 67.31 41.87 56.00 47.33 C44.70 52.80 44.70 69.20 56.00 74.67 C67.31 80.13 67.31 96.53 56.00 102.00" stroke="#b4683f" stroke-width="5.6"/><path d="M56.00 20.00 C67.31 25.47 67.31 41.87 56.00 47.33 C44.70 52.80 44.70 69.20 56.00 74.67 C67.31 80.13 67.31 96.53 56.00 102.00" stroke="#f8f2e8" stroke-width="2.1"/><path d="M56.00 20.00 C44.70 25.47 44.70 41.87 56.00 47.33 C67.31 52.80 67.31 69.20 56.00 74.67 C44.70 80.13 44.70 96.53 56.00 102.00" stroke="#5b7a6a" stroke-width="5.6"/><path d="M56.00 20.00 C44.70 25.47 44.70 41.87 56.00 47.33 C67.31 52.80 67.31 69.20 56.00 74.67 C44.70 80.13 44.70 96.53 56.00 102.00" stroke="#f8f2e8" stroke-width="2.1"/></g></g>
 </svg>

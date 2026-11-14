@@ -40,7 +40,7 @@ export function Segmented({ value, onChange, options, label }) {
 export function Empty({ title, children, art = true }) {
   return (
     <div className="empty">
-      {art && <img className="empty-art" src="/assets/beans-roast.webp" alt="" width="200" height="164" />}
+      {art && <img className="empty-art" src="/favicon.svg" alt="" width="140" height="140" />}
       <p className="empty-title">{title}</p>
       {children && <p className="muted">{children}</p>}
     </div>

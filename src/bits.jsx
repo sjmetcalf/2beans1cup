@@ -1,17 +1,23 @@
 // Motion pieces in the spirit of React Bits (reactbits.dev), rebuilt dependency-free
 // and tuned to the cafe palette: BlurText, CountUp, SpotlightCard, Marquee, ShinyText, Grain.
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useInView, usePrefersReducedMotion } from "./hooks.js";
 
 export function BlurText({ text, as: Tag = "h1", className = "", delay = 70, start = 0 }) {
   const [ref, inView] = useInView({ threshold: 0.1 });
-  const words = text.split(" ");
+  // "\n" in the text forces a line break (each line stays together on small screens)
+  const lines = text.split("\n").map((l) => l.split(" "));
+  let n = 0;
   return (
-    <Tag ref={ref} className={`blur-text ${inView ? "is-in" : ""} ${className}`} aria-label={text}>
-      {words.map((w, i) => (
-        <span key={i} aria-hidden="true" className="blur-word" style={{ transitionDelay: `${start + i * delay}ms` }}>
-          {w}
-          {i < words.length - 1 ? " " : ""}
+    <Tag ref={ref} className={`blur-text ${inView ? "is-in" : ""} ${className}`} aria-label={text.replace(/\n/g, " ")}>
+      {lines.map((words, li) => (
+        <span key={li} className={lines.length > 1 ? "blur-line" : undefined}>
+          {words.map((w, i) => (
+            <Fragment key={i}>
+              <span aria-hidden="true" className="blur-word" style={{ transitionDelay: `${start + n++ * delay}ms` }}>{w}</span>
+              {i < words.length - 1 ? " " : null}
+            </Fragment>
+          ))}
         </span>
       ))}
     </Tag>

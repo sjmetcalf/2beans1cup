@@ -1,9 +1,10 @@
-/* 2beans1cup — third-wave cafe styling */
+/* Doppio Drifters — third-wave cafe styling with a drift */
 @font-face { font-family: "Inter"; src: url("/assets/fonts/inter-400.woff") format("woff"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/assets/fonts/inter-500.woff") format("woff"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/assets/fonts/inter-600.woff") format("woff"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "Inter Display"; src: url("/assets/fonts/interdisplay-500.woff") format("woff"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "Inter Display"; src: url("/assets/fonts/interdisplay-600.woff") format("woff"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Inter Display"; src: url("/assets/fonts/interdisplay-800i.woff") format("woff"); font-weight: 800; font-style: italic; font-display: swap; }
 
 :root {
   /* Cafe: crema + roast */
@@ -83,7 +84,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav-brand:hover { color: var(--roast); }
 .nav-brand:hover .nav-mark { transform: rotate(-4deg) scale(1.04); }
 @media (max-width: 860px) { .nav-mark { height: 38px; } }
-.wordmark { font-family: var(--display); font-weight: 600; font-size: 23px; line-height: 1; letter-spacing: -0.03em; }
+.wordmark { font-family: var(--display); font-weight: 800; font-style: italic; font-size: 23px; line-height: 1; letter-spacing: -0.035em; white-space: nowrap; padding-right: 0.08em; }
 .wordmark-1 { color: var(--clay); }
 .nav-scroller { min-width: 0; }
 .nav-links { position: relative; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); }
@@ -142,11 +143,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Hero */
 .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(24px, 4vw, 56px); align-items: center; padding: clamp(40px, 6vw, 88px) 0 clamp(40px, 5vw, 64px); }
-.hero-title { font-size: clamp(44px, 7.2vw, 96px); letter-spacing: -0.045em; line-height: 0.98; padding-bottom: 0.06em; }
+.hero-title { font-weight: 800; font-style: italic; font-size: clamp(44px, 7.2vw, 96px); letter-spacing: -0.045em; line-height: 0.98; padding-bottom: 0.06em; padding-right: 0.1em; }
 .hero-lede { font-size: clamp(16px, 1.5vw, 19px); color: var(--roast-2); margin-top: 22px; max-width: 520px; }
 .hero-actions { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; align-items: center; }
 .hero-copy { position: relative; }
-.hero-badge { width: 132px; height: auto; margin: -36px 0 -36px auto; flex: none; filter: drop-shadow(0 12px 22px rgba(43, 29, 20, 0.14)); }
+.hero-badge { width: 132px; height: auto; margin: -12px 0 -40px auto; flex: none; filter: drop-shadow(0 12px 22px rgba(43, 29, 20, 0.14)); }
 
 /* "Today at the cafe" panel */
 .today { padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; }
@@ -668,3 +669,11 @@ img, svg { max-width: 100%; }
   /* 16px stops iPhone from zooming in when a field is tapped */
   .form input, .form select, .form textarea, .add-row input { font-size: 16px; }
 }
+
+/* Hero: one sentence per line; words drift in from the left */
+.blur-line { display: block; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero-title .blur-word { transform: translateX(-0.6em) skewX(-14deg); }
+  .hero-title.is-in .blur-word { transform: none; }
+}
+@media (max-width: 520px) { .hide-narrow { display: none; } }

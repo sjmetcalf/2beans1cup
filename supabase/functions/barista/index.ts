@@ -1,4 +1,4 @@
-// 2beans1cup "barista" edge function.
+// Doppio Drifters "barista" edge function.
 // Every write to the cafe goes through here and requires the shared passcode
 // stored in the BARISTA_CODE secret. Garmin keys are stored server-side only.
 import { createClient } from "npm:@supabase/supabase-js@2";

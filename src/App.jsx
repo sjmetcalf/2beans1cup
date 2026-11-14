@@ -72,8 +72,8 @@ function Nav({ route }) {
 
   return (
     <header className="nav" ref={headerRef}>
-      <a href="#/" className="nav-brand" aria-label="2beans1cup home">
-        <span className="wordmark">2beans<span className="wordmark-1">1</span>cup</span>
+      <a href="#/" className="nav-brand" aria-label="Doppio Drifters home">
+        <span className="wordmark">Doppio <span className="wordmark-1">Drifters</span></span>
       </a>
       <a href="#/barista" className={`nav-account ${route === "/barista" ? "is-active" : ""}`} aria-label={code ? "Barista settings (you're behind the bar)" : "Barista settings"}>
         <PersonIcon />

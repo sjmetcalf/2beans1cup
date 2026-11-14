@@ -1,7 +1,7 @@
 {
-  "name": "2beans1cup",
-  "short_name": "2beans1cup",
-  "description": "Two beans, one cup. Training together for the Grand Traverse Triple Crown.",
+  "name": "Doppio Drifters",
+  "short_name": "Doppio",
+  "description": "Two shots. No brakes. Three races. Training for the Grand Traverse Triple Crown.",
   "id": "/",
   "start_url": "/#/",
   "scope": "/",
