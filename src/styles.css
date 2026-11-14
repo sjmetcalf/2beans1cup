@@ -115,17 +115,50 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-title { font-size: clamp(40px, 6.5vw, 76px); }
 
 /* Hero */
-.hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(24px, 4vw, 56px); align-items: center; padding: clamp(40px, 7vw, 96px) 0 clamp(40px, 6vw, 72px); }
-.hero-title { font-size: clamp(48px, 8.2vw, 104px); letter-spacing: -0.045em; line-height: 0.95; }
-.hero-lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--roast-2); margin-top: 24px; max-width: 540px; }
-.hero-actions { display: flex; gap: 12px; margin-top: 32px; flex-wrap: wrap; }
-.hero-badge { display: flex; justify-content: center; }
-.hero-badge .badge { width: min(420px, 100%); height: auto; filter: drop-shadow(0 30px 40px rgba(43, 29, 20, 0.14)); }
+.hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(24px, 4vw, 56px); align-items: center; padding: clamp(40px, 6vw, 88px) 0 clamp(40px, 5vw, 64px); }
+.hero-title { font-size: clamp(44px, 7.2vw, 96px); letter-spacing: -0.045em; line-height: 0.95; }
+.hero-lede { font-size: clamp(16px, 1.5vw, 19px); color: var(--roast-2); margin-top: 22px; max-width: 520px; }
+.hero-actions { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+
+/* "Today at the cafe" panel */
+.today { padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; }
+.today-loading { min-height: 320px; display: grid; place-items: center; background: var(--milk); border: 1px solid var(--line); border-radius: var(--radius); }
+.today-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.today-label { font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--clay); }
+.today-date { font-size: 13px; color: var(--muted); font-weight: 500; }
+.today-race { display: flex; align-items: center; gap: 16px; padding-bottom: 18px; border-bottom: 1px dashed var(--line-strong); }
+.today-big { font-family: var(--display); font-size: clamp(56px, 6vw, 76px); font-weight: 600; letter-spacing: -0.05em; line-height: 0.9; }
+.today-race-title { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -0.02em; line-height: 1.15; }
+.today-sub { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.today-week { display: flex; flex-direction: column; }
+.today-row { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); align-items: baseline; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.today-row:last-child { border-bottom: 0; }
+.today-row strong { font-family: var(--display); font-size: 21px; font-weight: 600; color: var(--roast); letter-spacing: -0.03em; }
+.today-row strong .count-up { font: inherit; }
+.today-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--roast); font-size: 15px; }
+.today-latest { display: block; text-decoration: none; padding: 12px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.today-latest:hover { border-color: var(--clay); color: inherit; }
+.today-latest-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
+.today-reg { display: flex; justify-content: space-between; align-items: center; text-decoration: none; font-size: 14px; font-weight: 600; padding-top: 2px; }
+
 @media (max-width: 860px) {
-  .hero { grid-template-columns: 1fr; }
-  .hero-badge { order: -1; }
-  .hero-badge .badge { width: min(280px, 70vw); }
+  .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 28px; }
+  .hero-title { font-size: clamp(42px, 12vw, 64px); }
+  .hero-actions { margin-top: 22px; }
+  .today { padding: 18px; }
 }
+@media (max-width: 420px) {
+  .today-row { grid-template-columns: 1fr 1fr 1fr; row-gap: 2px; }
+  .today-row .today-name { grid-column: 1 / -1; }
+}
+
+/* Last-30-days strip */
+.month-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.month-strip-item { padding: 16px 20px; border-radius: var(--radius); background: var(--milk); border: 1px solid var(--line); border-left: 4px solid var(--bean); box-shadow: var(--shadow); }
+.month-strip-item .stat-row { margin-top: 0.6rem; }
+.section-more { display: flex; gap: 20px; margin-top: 18px; font-weight: 600; font-size: 14px; }
+.section-more a { text-decoration: none; color: var(--clay); }
+@media (max-width: 700px) { .month-strip { grid-template-columns: 1fr; } }
 
 /* Badge */
 .badge { color: var(--roast); display: block; }
