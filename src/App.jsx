@@ -8,6 +8,7 @@ import { Menu } from "./pages/Menu.jsx";
 import { Bar } from "./pages/Bar.jsx";
 import { Barista } from "./pages/Barista.jsx";
 import { FreeTime } from "./pages/FreeTime.jsx";
+import { Drift } from "./pages/Drift.jsx";
 
 const NAV = [
   { to: "/", label: "Cafe", short: "Cafe" },
@@ -36,6 +37,7 @@ const PAGES = {
   "/bar": Bar,
   "/barista": Barista,
   "/free-time": FreeTime,
+  "/drift": Drift,
 };
 
 function Nav({ route }) {
@@ -110,7 +112,7 @@ export function App() {
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <p className="muted footer-meta">Ski · Run · Bike · Espresso</p>
+          <p className="muted footer-meta">Ski · Run · Bike · Espresso · <a href="#/drift" className="footer-play">Play Doppio Drift</a></p>
         </div>
       </footer>
     </>

@@ -228,7 +228,7 @@ export function Home() {
           <div className="hero-actions">
             <a className="btn btn-dark" href="#/side-by-side">Compare our pours</a>
             <a className="btn btn-ghost" href="#/menu">See the menu</a>
-            <Badge size={128} className="hero-badge" />
+            <a href="#/drift" className="hero-badge-link" aria-label="Play Doppio Drift" title="Play Doppio Drift"><Badge size={128} className="hero-badge" /></a>
           </div>
         </div>
         <div className="hero-panel">

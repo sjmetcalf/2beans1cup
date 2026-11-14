@@ -680,3 +680,16 @@ img, svg { max-width: 100%; }
 
 /* Optical left edge for the italic hero: "T" carries extra side space, so pull those lines in to sit flush with "N" */
 .hero-title .blur-line[data-first="T"] { margin-left: -0.055em; }
+
+/* Doppio Drift */
+.drift-card { margin-top: 20px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--paper); }
+.drift-canvas { display: block; width: 100%; touch-action: manipulation; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+.drift-canvas:focus-visible { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--clay) 50%, transparent); }
+.drift-controls { display: none; gap: 12px; margin-top: 14px; }
+.drift-btn { flex: 1; justify-content: center; user-select: none; -webkit-user-select: none; touch-action: none; }
+.drift-help { margin-top: 12px; }
+@media (hover: none) and (pointer: coarse) { .drift-controls { display: flex; } }
+.footer-play { color: var(--clay); text-decoration: none; }
+.footer-play:hover { text-decoration: underline; }
+.hero-badge-link { display: contents; }
+.hero-badge-link:hover .hero-badge { filter: drop-shadow(0 14px 26px rgba(43, 29, 20, 0.22)); }
