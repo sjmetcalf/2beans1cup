@@ -57,7 +57,22 @@ const prettyName = (fileName) => {
   const base = fileName.replace(/\.ics$/i, "").replace(/[_-]+/g, " ").replace(/\s*\(\d+\)$/, "").trim();
   return (base.charAt(0).toUpperCase() + base.slice(1)).slice(0, 40) || "Calendar";
 };
-const KIND_OPTIONS = [{ value: "busy", label: "Busy" }, { value: "off", label: "Time off" }];
+// Work schedules are mostly timed meetings; time-off and holiday calendars are mostly all-day events.
+function detectKind(fileName, blocks) {
+  if (OFF_RE.test(fileName)) return "off";
+  if (!blocks.length) return "busy";
+  const allDay = blocks.filter((b) => b.all_day).length;
+  return allDay / blocks.length >= 0.6 ? "off" : "busy";
+}
+const KIND_LABEL = { busy: "Work schedule", off: "Time off" };
+
+function KindTag({ kind, onToggle }) {
+  return (
+    <button type="button" className={`kind-tag kind-${kind}`} onClick={onToggle} title="Tap to switch between work schedule and time off">
+      {KIND_LABEL[kind]} <span aria-hidden="true">⇄</span>
+    </button>
+  );
+}
 
 export function Upload({ people, sources = [], onDone }) {
   const [personId, setPersonId] = useState(people[0]?.id);
@@ -74,16 +89,27 @@ export function Upload({ people, sources = [], onDone }) {
     const list = [...(e.target.files || [])];
     const parsed = await Promise.all(list.map(async (f, i) => {
       const name = prettyName(f.name);
-      const kind = OFF_RE.test(f.name) ? "off" : "busy";
       try {
         const text = await f.text();
         if (!/BEGIN:VCALENDAR/i.test(text)) throw new Error("Not an .ics calendar file.");
-        return { key: `${Date.now()}-${i}`, fileName: f.name, name, kind, asBusy: icsToBusy(text), asOff: icsToBusy(text, { keepFree: true }) };
+        const asBusy = icsToBusy(text);
+        const asOff = icsToBusy(text, { keepFree: true });
+        const kind = detectKind(f.name, asOff.blocks);
+        return { key: `${Date.now()}-${i}`, fileName: f.name, name, kind, asBusy, asOff };
       } catch (e2) {
-        return { key: `${Date.now()}-${i}`, fileName: f.name, name, kind, error: e2.message };
+        return { key: `${Date.now()}-${i}`, fileName: f.name, name, kind: "busy", error: e2.message };
       }
     }));
-    setFiles(parsed);
+    // Generic export names (calendar.ics, calendar (1).ics…) get named after their type; keep names unique
+    const seen = new Map();
+    const named = parsed.map((f) => {
+      let name = /^(calendar|calendars|basic|export|outlook|ics|cal)( \d+)?$/i.test(f.name) ? KIND_LABEL[f.kind] : f.name;
+      const n = (seen.get(name.toLowerCase()) || 0) + 1;
+      seen.set(name.toLowerCase(), n);
+      if (n > 1) name = `${name} ${n}`;
+      return { ...f, name, autoName: name !== f.name };
+    });
+    setFiles(named);
   };
   const update = (key, patch) => setFiles((fs) => fs.map((f) => (f.key === key ? { ...f, ...patch } : f)));
   const parsedFor = (f) => (f.kind === "off" ? f.asOff : f.asBusy);
@@ -116,7 +142,7 @@ export function Upload({ people, sources = [], onDone }) {
     <div className="chart-card upload-card">
       <header className="chart-card-head">
         <h3>Add calendars</h3>
-        <p>Add as many .ics files as you like (work, time off, holidays). Your browser reads them and sends only start and end times; titles and details never leave this page. Re-uploading a calendar with the same name replaces it.</p>
+        <p>Add your work schedule and time off (or as many .ics files as you like). Days off automatically cancel out work that day. Your browser reads the files and sends only start and end times; titles and details never leave this page. Re-uploading a calendar with the same name replaces it.</p>
       </header>
 
       <div className="upload-row">
@@ -132,8 +158,8 @@ export function Upload({ people, sources = [], onDone }) {
           {files.map((f) => (
             <div key={f.key} className="upload-file">
               <div className="upload-file-main">
-                <input className="upload-name" value={f.name} maxLength={40} onChange={(e) => update(f.key, { name: e.target.value })} aria-label={`Name for ${f.fileName}`} />
-                <Segmented label="Calendar type" value={f.kind} onChange={(v) => update(f.key, { kind: v })} options={KIND_OPTIONS} />
+                <input className="upload-name" value={f.name} maxLength={40} onChange={(e) => update(f.key, { name: e.target.value, autoName: false })} aria-label={`Name for ${f.fileName}`} />
+                {!f.error && <KindTag kind={f.kind} onToggle={() => { const kind = f.kind === "off" ? "busy" : "off"; update(f.key, f.autoName ? { kind, name: KIND_LABEL[kind] } : { kind }); }} />}
               </div>
               <p className="muted small">
                 {f.error ? <span className="error-text">{f.fileName}: {f.error}</span> : (
@@ -157,7 +183,7 @@ export function Upload({ people, sources = [], onDone }) {
               <strong>{src.name}</strong>
               <span className="muted small">{src.block_count} blocks · {new Date(src.uploaded_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
             </div>
-            <Segmented label={`${src.name} type`} value={src.kind} onChange={(v) => setKind(src, v)} options={KIND_OPTIONS} />
+            <KindTag kind={src.kind} onToggle={() => setKind(src, src.kind === "off" ? "busy" : "off")} />
             <button className="icon-btn" onClick={() => remove(src)} aria-label={`Remove ${src.name}`} disabled={busy}>×</button>
           </div>
         ))}
