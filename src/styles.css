@@ -719,3 +719,26 @@ img, svg { max-width: 100%; }
 .drift-rules b { color: var(--roast-2); }
 .show-narrow { display: none; }
 @media (max-width: 520px) { .show-narrow { display: inline; } }
+
+/* Doppio Drift: full-screen play */
+.drift-play-row { display: flex; gap: 10px; margin-top: 14px; }
+.drift-play { display: inline-flex; align-items: center; gap: 8px; }
+.drift-stage { position: relative; width: 100%; }
+html.drift-lock, html.drift-lock body { overflow: hidden; overscroll-behavior: none; height: 100%; }
+.drift-card.drift-fs {
+  position: fixed; inset: 0; z-index: 1000; margin: 0; border: 0; border-radius: 0; box-shadow: none;
+  background: var(--paper); display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  height: 100vh; height: 100dvh;
+}
+.drift-fs .drift-stage { flex: 1; min-height: 0; }
+.drift-fs .drift-canvas { touch-action: none; }
+.drift-exit {
+  position: absolute; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%);
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-strong); background: rgba(251, 248, 243, 0.9);
+  font-size: 15px; color: var(--roast); cursor: pointer; display: grid; place-items: center; z-index: 2;
+}
+.drift-canvas { -webkit-touch-callout: none; -webkit-user-select: none; }
+
+.footer-meta { white-space: nowrap; }
+@media (max-width: 520px) { .footer-meta { letter-spacing: 0.16em; font-size: 10.5px; } }

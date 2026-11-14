@@ -265,6 +265,29 @@ export function Drift() {
   const bestRaceRef = useRef(bestRace);
   const onOverRef = useRef(null);
   const resetRef = useRef(null);
+  const stageRef = useRef(null);
+  const [fs, setFs] = useState(false);
+  const fsRef = useRef(false);
+  const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+
+  const enterFs = () => {
+    fsRef.current = true; setFs(true);
+    document.documentElement.classList.add("drift-lock");
+    const el = wrapRef.current;
+    try { el?.requestFullscreen?.({ navigationUI: "hide" })?.catch?.(() => {}); } catch { /* iPhone Safari: fixed overlay instead */ }
+    setTimeout(() => canvasRef.current?.focus(), 50);
+  };
+  const exitFs = () => {
+    fsRef.current = false; setFs(false);
+    document.documentElement.classList.remove("drift-lock");
+    const s = gameRef.current; if (s && s.state === "running") s.paused = true;
+    if (document.fullscreenElement) document.exitFullscreen?.().catch?.(() => {});
+  };
+  useEffect(() => {
+    const onFsChange = () => { if (!document.fullscreenElement && fsRef.current) exitFs(); };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => { document.removeEventListener("fullscreenchange", onFsChange); document.documentElement.classList.remove("drift-lock"); };
+  }, []);
 
   const pickMode = (m) => {
     setMode(m); modeRef.current = m; setState("ready");
@@ -276,9 +299,16 @@ export function Drift() {
     const canvas = canvasRef.current, wrap = wrapRef.current;
     const ctx = canvas.getContext("2d");
     let W = 0, H = 0, ground = 0, slope0 = 0.35, slopeMax = 0.45, raf = 0, last = 0;
+    let dprCap = 2;
+    const stage = stageRef.current;
     const size = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = wrap.clientWidth; H = W < 560 ? 400 : 480; ground = Math.round(H * (W < 560 ? 0.3 : 0.24));
+      const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+      if (fsRef.current) {
+        W = stage.clientWidth; H = Math.max(240, stage.clientHeight);
+        ground = Math.round(Math.max(100, H * (H > W ? 0.3 : 0.27)));
+      } else {
+        W = wrap.clientWidth; H = W < 560 ? 400 : 480; ground = Math.round(H * (W < 560 ? 0.3 : 0.24));
+      }
       // steepest slope that still keeps the far (right-hand) end of the run on screen
       const cx = Math.max(64, W * 0.16);
       slopeMax = Math.min(0.62, (H + 18 - ground) / (W - cx));
@@ -318,6 +348,8 @@ export function Drift() {
     };
 
     const onKey = (e) => {
+      if (e.code === "Escape" && fsRef.current) { exitFs(); return; }
+      if (g().paused && ["Space", "ArrowUp", "KeyW"].includes(e.code)) { e.preventDefault(); g().paused = false; last = 0; return; }
       if (e.target instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
       if (["Space", "ArrowUp", "KeyW"].includes(e.code)) { e.preventDefault(); if (!e.repeat) jump(); }
       if (["ArrowDown", "KeyS"].includes(e.code)) { e.preventDefault(); if (!e.repeat) duck(true); }
@@ -326,19 +358,38 @@ export function Drift() {
       if (["Space", "ArrowUp", "KeyW"].includes(e.code)) releaseJump();
       if (["ArrowDown", "KeyS"].includes(e.code)) duck(false);
     };
-    const onDown = (e) => { e.preventDefault(); canvas.focus(); jump(); };
-    const onUp = () => releaseJump();
+    const zones = new Map(); // pointerId -> "jump" | "duck"
+    const onDown = (e) => {
+      e.preventDefault(); canvas.focus();
+      const s = g();
+      if (s.paused) { s.paused = false; last = 0; return; }
+      const isTouch = e.pointerType === "touch" || e.pointerType === "pen";
+      if (isTouch && s.state === "running" && s.phase === "down") {
+        const r = canvas.getBoundingClientRect();
+        if (e.clientX - r.left < r.width / 2) { zones.set(e.pointerId, "duck"); duck(true); return; }
+        zones.set(e.pointerId, "jump");
+      }
+      jump();
+    };
+    const onUp = (e) => {
+      const z = zones.get(e.pointerId); zones.delete(e.pointerId);
+      if (z === "duck") duck(false); else releaseJump();
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointercancel", onUp);
+    const noMenu = (e) => e.preventDefault();
+    canvas.addEventListener("contextmenu", noMenu);
     try { if (localStorage.getItem("doppio.drift.debug")) window.__driftState = g; } catch { /* ignore */ }
     window.__driftDuck = duck; window.__driftJump = jump; window.__driftRelease = releaseJump;
-    const ro = new ResizeObserver(() => size()); ro.observe(wrap);
-    const onVis = () => { if (document.hidden) last = 0; };
+    const ro = new ResizeObserver(() => size()); ro.observe(wrap); ro.observe(stage);
+    const onVis = () => { if (document.hidden) { last = 0; const s = g(); if (s.state === "running") s.paused = true; } };
     document.addEventListener("visibilitychange", onVis);
 
     const say = (s, msg, t = 1.4) => { s.bonusMsg = msg; s.bonusT = t; };
+    const buzz = (p) => { try { navigator.vibrate?.(p); } catch { /* not supported */ } };
     const reward = (s, ft, secs, label) => {
       if (s.mode === "race") { s.raceBonus += secs; say(s, `${label} · −${secs.toFixed(1)}s`); }
       else { s.dist += ft * 10; say(s, `${label} · +${ft} ft`); }
@@ -417,6 +468,7 @@ export function Drift() {
     const damage = (s, amt, msg) => {
       if (s.inv > 0) return;
       s.fill = Math.max(0, s.fill - amt); s.inv = 1.2; s.slowT = 1.6; spillOut(s, 8);
+      buzz(s.fill <= 0.001 ? [40, 60, 80] : 35);
       if (s.fill <= 0.001) end(s, "over", "Spilled!");
       else say(s, `${msg} · −${Math.round(amt * 100)}% coffee`, 1.2);
     };
@@ -425,6 +477,9 @@ export function Drift() {
       raf = requestAnimationFrame(step);
       const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 0; last = now;
       const s = g();
+      // drop to 1x pixels if the phone can't keep up
+      if (dt > 0 && dprCap > 1) { s.slowFrames = (s.slowFrames || 0) * 0.97 + (dt > 0.024 ? 1 : 0); if (s.slowFrames > 20) { dprCap = 1; size(); } }
+      if (s.paused) { draw(s); return; }
       s.t += dt;
       if (s.state === "running") {
         s.runT += dt; if (s.mode === "race") s.raceT += dt;
@@ -711,9 +766,30 @@ export function Drift() {
         else if (s.onIce) banner("Ice!", "No grip: you can't jump on ice", "#4f7f99", 0.9);
         else if (s.climb && s.trav / 10 > s.climb.start - 90) banner(`Skin track ahead`, `Climb to ${s.climb.name}`, C.sage, 0.9);
       }
+      // first seconds of a touch run: show the two tap zones
+      if (touch && s.state === "running" && s.phase === "down" && s.runT < 4) {
+        const a = Math.min(1, (4 - s.runT) / 1.2) * 0.9;
+        ctx.globalAlpha = a; ctx.strokeStyle = "rgba(43,29,20,0.18)"; ctx.setLineDash([6, 8]);
+        ctx.beginPath(); ctx.moveTo(W / 2, H * 0.62); ctx.lineTo(W / 2, H - 20); ctx.stroke(); ctx.setLineDash([]);
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.font = "700 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2;
+        ctx.fillText("◀ DUCK / SPIN", W * 0.25, H - 22); ctx.fillText("JUMP ▶", W * 0.75, H - 22);
+        ctx.font = "500 11px Inter, system-ui, sans-serif"; ctx.fillStyle = C.muted;
+        ctx.fillText("tap left half", W * 0.25, H - 8); ctx.fillText("tap right half", W * 0.75, H - 8);
+        ctx.globalAlpha = 1; ctx.textBaseline = "top";
+      }
+      if (s.paused && s.state === "running") {
+        ctx.fillStyle = "rgba(251,248,243,0.72)"; ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = "center"; ctx.fillStyle = C.roast; ctx.font = "italic 800 30px 'Inter Display', Inter, system-ui, sans-serif";
+        ctx.fillText("Paused", W / 2, H * 0.42);
+        ctx.font = "500 14px Inter, system-ui, sans-serif"; ctx.fillStyle = C.roast2; ctx.fillText("Tap or press space to keep going", W / 2, H * 0.42 + 42);
+      }
       if (s.state !== "running") {
         ctx.textAlign = "center";
         const by = H * 0.58, bw = Math.min(360, W - 32);
+        if (fsRef.current && touch && H > W * 1.2 && s.state === "ready") {
+          ctx.font = "600 13px Inter, system-ui, sans-serif"; ctx.fillStyle = C.clay;
+          ctx.fillText("Tip: turn your phone sideways for a longer view of the slope", W / 2, by + 96, W - 32);
+        }
         ctx.fillStyle = "rgba(251,248,243,0.9)";
         ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - 12, bw, 84, 14) : ctx.rect(W / 2 - bw / 2, by - 12, bw, 84); ctx.fill();
         ctx.fillStyle = s.state === "finished" ? C.sage : C.roast; ctx.font = "italic 800 28px 'Inter Display', Inter, system-ui, sans-serif";
@@ -730,12 +806,11 @@ export function Drift() {
     return () => {
       cancelAnimationFrame(raf); ro.disconnect();
       window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp);
-      canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointercancel", onUp); canvas.removeEventListener("contextmenu", noMenu);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
-  const hold = (on) => (e) => { e.preventDefault(); window.__driftDuck?.(on); };
   return (
     <section className="section section-first drift-page">
       <Eyebrow>Between intervals</Eyebrow>
@@ -745,17 +820,22 @@ export function Drift() {
         <button type="button" className={`chip ${mode === "endless" ? "is-on" : ""}`} aria-pressed={mode === "endless"} onClick={() => pickMode("endless")}>Endless</button>
         <button type="button" className={`chip ${mode === "race" ? "is-on" : ""}`} aria-pressed={mode === "race"} onClick={() => pickMode("race")}>Race day · {fmtDay(course)}</button>
       </div>
-      <div className="drift-card" ref={wrapRef}>
-        <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift, ${mode === "race" ? "race day" : "endless"} mode. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
+      <div className="drift-play-row">
+        <button type="button" className="btn btn-dark drift-play" onClick={enterFs}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+          Play full screen
+        </button>
       </div>
-      <div className="drift-controls">
-        <button type="button" className="btn btn-dark drift-btn" onPointerDown={(e) => { e.preventDefault(); window.__driftJump?.(); }} onPointerUp={() => window.__driftRelease?.()}>Jump</button>
-        <button type="button" className="btn btn-ghost drift-btn" onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)}>Duck / Spin</button>
+      <div className={`drift-card ${fs ? "drift-fs" : ""}`} ref={wrapRef}>
+        <div className="drift-stage" ref={stageRef}>
+          <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift, ${mode === "race" ? "race day" : "endless"} mode. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
+        </div>
+        {fs && <button type="button" className="drift-exit" onClick={exitFs} aria-label="Exit full screen">✕</button>}
       </div>
       <ul className="drift-rules muted small">
-        <li><b>Controls:</b> <span className="hide-narrow">space or ↑ to jump (hold for more air), ↓ to duck on the ground or spin in the air.</span><span className="show-narrow">Jump, and Duck / Spin (spins when you're in the air).</span></li>
+        <li><b>Controls:</b> <span className="hide-narrow">space or ↑ to jump (hold for more air), ↓ to duck on the ground or spin in the air.</span><span className="show-narrow">tap the right half to jump (hold for more air), the left half to duck, or to spin in the air.</span></li>
         <li><b>Coffee is your health:</b> hits slosh it out, beans top it up, an empty cup ends the run.</li>
-        <li><b>Spin</b> with ↓ (or Duck / Spin) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
+        <li><b>Spin</b> with ↓ (or the left half on a phone) in the air. Big air and spins only score off kickers, and landing mid-spin costs coffee.</li>
         <li><b>Skin tracks:</b> tap fast to put skins on, stride up by tapping when the marker is in the green, then tap fast again to rip skins at the pass.</li>
         <li><b>Every 1,000 ft</b> it gets steeper and faster: ravens, ice and tree wells, then moose.</li>
         <li><b>Race day</b> is the same course for everyone today: reach each checkpoint before its cutoff, fastest time to Aspen wins.</li>

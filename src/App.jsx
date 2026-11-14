@@ -112,7 +112,7 @@ export function App() {
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <p className="muted footer-meta">Ski · Run · Bike · Espresso · <a href="#/drift" className="footer-play">Play Doppio Drift</a></p>
+          <p className="muted footer-meta">Ski · Run · Bike · <a href="#/drift" className="footer-play">Play <span className="hide-narrow">Doppio </span>Drift</a></p>
         </div>
       </footer>
     </>
