@@ -745,6 +745,9 @@ img, svg { max-width: 100%; }
 
 /* Doppio Drift: full-screen play */
 .drift-play-row { display: flex; gap: 10px; margin-top: 14px; }
+/* phones play full screen only: the inline game stays hidden until Play is tapped */
+.drift-card.is-touch:not(.drift-fs) { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; margin: 0; }
+.drift-play-big { width: 100%; justify-content: center; padding: 16px 20px; font-size: 17px; }
 .drift-play { display: inline-flex; align-items: center; gap: 8px; }
 .drift-stage { position: relative; width: 100%; }
 html.drift-lock, html.drift-lock body { overflow: hidden; overscroll-behavior: none; height: 100%; }

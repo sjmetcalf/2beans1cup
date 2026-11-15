@@ -75,7 +75,7 @@ function drawRock(ctx, x, groundY, w, h) {
 }
 
 // Terrain-park kicker: a snow wedge rising to a lip on its downhill (right) end
-const KICKERS = { s: { w: 70, h: 14, launch: 640 }, m: { w: 96, h: 24, launch: 830 }, l: { w: 128, h: 36, launch: 1040 } };
+const KICKERS = { s: { w: 70, h: 14, launch: 640 }, m: { w: 96, h: 24, launch: 830 }, l: { w: 128, h: 36, launch: 1040 }, xl: { w: 176, h: 54, launch: 1220 }, xxl: { w: 236, h: 76, launch: 1400 } };
 function drawKicker(ctx, x, groundY, w, h) {
   ctx.fillStyle = "#efe6da";
   ctx.beginPath(); ctx.moveTo(x, groundY); ctx.quadraticCurveTo(x + w * 0.62, groundY - h * 0.18, x + w, groundY - h); ctx.lineTo(x + w + h * 0.35, groundY); ctx.closePath(); ctx.fill();
@@ -199,7 +199,8 @@ const CLIMB_SLOPE = 0.18;
 const STRIDE_PERIOD = 1.2; // seconds per sweep = two beats of the theme (quarter = 100 bpm)
 const strideMeter = (t) => (Math.sin(t * ((2 * Math.PI) / STRIDE_PERIOD) - Math.PI / 2) + 1) / 2; // 0..1, sweet spot 0.36-0.64
 const TIER_FT = 1000;
-const baseSpeed = (runT, tier) => Math.min(860, 360 + 9 * runT) + 45 * tier;
+// speedT is time since the start or the last spill: a spill drops you back to the starting 360 and you build up again
+const baseSpeed = (speedT, tier) => 360 + Math.min(500, 9 * speedT) + 45 * tier * Math.min(1, speedT / 5);
 const TIERS = [
   "",
   "Tier 1 · Steeper. Ravens, ice and tree wells.",
@@ -211,7 +212,7 @@ const DMG = { pine: 0.34, rock: 0.34, raven: 0.34, ball: 0.3, moose: 0.5, well: 
 
 function newGame(W) {
   return {
-    rng: mulberry32((Math.random() * 2 ** 32) >>> 0), state: "ready", t: 0, runT: 0, dist: 0, trav: 0, speed: 360, y: 0, vy: 0,
+    rng: mulberry32((Math.random() * 2 ** 32) >>> 0), state: "ready", t: 0, runT: 0, speedT: 0, dist: 0, trav: 0, speed: 360, y: 0, vy: 0,
     ducking: false, obstacles: [], nextIn: W * 0.9, flakes: [], spill: [], spray: [], splash: [],
     aval: null, nextAval: 1200, tier: 0, tierT: 0, fill: 1, inv: 0, slowT: 0,
     spin: null, spins: 0, cam: 0, beansGot: 0, passes: 0, tricks: 0, summary: null,
@@ -293,7 +294,15 @@ export function Drift() {
 
     const start = () => { gameRef.current = fresh(); gameRef.current.state = "running"; setState("running"); audio.sfx("start"); };
     // with the music on, the stride ring rides the theme's clock: every green window is centred on a beat
-    const syncStride = (s) => { const mt = audio.musicTime(); if (mt != null && mt > -1) s.strideT = mt + STRIDE_PERIOD / 4; };
+    // The stride ring always runs on the game clock; with the music playing it is pulled onto the beat
+    // so each green window lands on a quarter note. If the audio clock stalls, the ring just keeps going.
+    const syncStride = (s, pull = 1) => {
+      const mt = audio.musicTime();
+      if (mt == null || !Number.isFinite(mt)) return;
+      let off = (mt + STRIDE_PERIOD / 4 - s.strideT) % STRIDE_PERIOD;
+      if (off > STRIDE_PERIOD / 2) off -= STRIDE_PERIOD; else if (off < -STRIDE_PERIOD / 2) off += STRIDE_PERIOD;
+      s.strideT += off * pull;
+    };
     const tapAction = (s) => {
       if (s.phase === "on" || s.phase === "off") { s.taps++; s.tapFx = 0.15; audio.sfx("tap"); return; }
       if (s.phase === "climb") {
@@ -376,11 +385,13 @@ export function Drift() {
       const gapK = T >= 3 ? 0.85 : 1;
       const done = (k) => { s.nextIn = Math.max(s.speed * k * gapK, 230); };
       if (r < 0.15) {
-        const size = R() < 0.4 ? "s" : R() < 0.6 ? "m" : "l";
+        const q = R(); // bigger booters show up once the run gets going
+        const size = q < 0.3 ? "s" : q < 0.52 ? "m" : q < 0.72 ? "l" : q < 0.88 || T < 1 ? "xl" : "xxl";
         const k = KICKERS[size];
         s.obstacles.push({ kind: "kicker", size, x: X, w: k.w, h: k.h, launch: k.launch });
-        if (R() < 0.6) s.obstacles.push({ kind: "bean", x: X + k.w + 90 + R() * 80, w: 16, h: 16, by: beanY(70 + R() * 60) }); // reward for the air
-        s.nextIn = s.speed * (1.25 + (size === "l" ? 0.6 : size === "m" ? 0.35 : 0.1)) + k.w;
+        const big = size === "xl" || size === "xxl";
+        if (R() < (big ? 0.85 : 0.6)) s.obstacles.push({ kind: "bean", x: X + k.w + (big ? 180 : 90) + R() * 80, w: 16, h: 16, by: beanY((big ? 160 : 70) + R() * 60) }); // reward for the air
+        s.nextIn = s.speed * (1.25 + ({ s: 0.1, m: 0.35, l: 0.6, xl: 1.0, xxl: 1.4 })[size]) + k.w;
         return;
       }
       if (r < 0.25) { s.obstacles.push({ kind: "bean", x: X, w: 16, h: 16, by: beanY(26 + R() * 70) }); s.nextIn = s.speed * 0.3; return; }
@@ -442,7 +453,7 @@ export function Drift() {
     const damage = (s, amt, msg) => {
       if (s.inv > 0) return;
       amt *= s.st.dmgMul;
-      s.fill = Math.max(0, s.fill - amt); s.inv = 1.2; s.slowT = 1.6; spillOut(s, 8);
+      s.fill = Math.max(0, s.fill - amt); s.inv = 1.2; s.speedT = 0; spillOut(s, 8); // back to starting speed
       buzz(s.fill <= 0.001 ? [40, 60, 80] : 35);
       if (s.fill <= 0.001) end(s, "over", "Spilled!");
       else { audio.sfx("hit"); say(s, `${msg} · −${Math.round(amt * 100)}% coffee`, 1.2); }
@@ -460,12 +471,12 @@ export function Drift() {
       if (s.paused) { draw(s); return; }
       s.t += dt;
       if (s.state === "running") {
-        s.runT += dt;
+        s.runT += dt; if (s.phase === "down") s.speedT += dt;
         const ftPhys = s.trav / 10;
         const tier = Math.min(4, Math.floor(ftPhys / TIER_FT));
         if (tier > s.tier) { s.tier = tier; s.tierT = 2.6; audio.sfx("tier"); }
         s.tierT = Math.max(0, s.tierT - dt);
-        s.speed = baseSpeed(s.runT, s.tier);
+        s.speed = baseSpeed(s.speedT, s.tier);
         // skin climbs: clear the run-out, then skins on / stride up / skins off
         const cl = s.climb;
         const nearClimb = !!cl && s.trav + W * 1.3 >= cl.start * 10;
@@ -486,7 +497,7 @@ export function Drift() {
           }
         }
         if (s.phase === "climb") {
-          s.strideT += dt; syncStride(s);
+          s.strideT += dt; syncStride(s, Math.min(1, dt * 10));
           s.climbV = Math.max(55, s.climbV - 110 * dt);
           if (ftPhys >= cl.end) { s.phase = "off"; s.taps = 0; s.need = Math.max(2, 5 - s.st.tapCut); s.passes++; s.transT = 0; s.summitT = 2.4; s.summit = cl.name; audio.sfx("checkpoint"); }
         }
@@ -531,7 +542,7 @@ export function Drift() {
             if (s.spin) { s.spin = null; s.spins = 0; damage(s, s.st.spinLandDmg / s.st.dmgMul, "Sketchy landing"); }
             else if (s.fromKicker) { // points only for kicker air
               if (s.spins) { const names = ["", "360", "720", "1080", "1440"]; reward(s, Math.round(40 * s.spins * s.st.trickMul), 0, `${names[Math.min(4, s.spins)]}!`); s.tricks++; audio.sfx("trick"); }
-              else if (secs > 0.55) { reward(s, Math.round(secs * 60 * s.st.trickMul), 0, `${secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`); s.tricks++; audio.sfx("trick"); }
+              else if (secs > 0.55) { reward(s, Math.round(secs * 60 * s.st.trickMul), 0, `${secs > 1.9 ? "Massive air" : secs > 1.1 ? "Huge air" : "Big air"} ${secs.toFixed(1)}s`); s.tricks++; audio.sfx("trick"); }
             }
             s.spins = 0; s.fromKicker = false;
           }
@@ -777,12 +788,14 @@ export function Drift() {
       <h1 className="page-title">Doppio Drift</h1>
       <p className="lede">Bomb the Elk Mountains in a latte. Hit kickers and spin for bonus, grab espresso beans to top up, and keep enough coffee in the cup to make it down.</p>
       <div className="drift-play-row">
-        <button type="button" className="btn btn-dark drift-play" onClick={enterFs}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
-          Play full screen
+        <button type="button" className={`btn btn-dark drift-play ${touch ? "drift-play-big" : ""}`} onClick={enterFs}>
+          {touch
+            ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" /></svg>
+            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>}
+          {touch ? (state === "running" ? "Resume" : "Play Doppio Drift") : "Play full screen"}
         </button>
       </div>
-      <div className={`drift-card ${fs ? "drift-fs" : ""}`} ref={wrapRef}>
+      <div className={`drift-card ${fs ? "drift-fs" : ""} ${touch ? "is-touch" : ""}`} ref={wrapRef}>
         <div className="drift-stage" ref={stageRef}>
           <canvas ref={canvasRef} className="drift-canvas" tabIndex={0} aria-label={`Doppio Drift. ${state === "running" ? "Running." : "Press space or tap to start."}`} />
         </div>

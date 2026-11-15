@@ -155,8 +155,13 @@ export function music(on) {
 
 export const BEAT = STEP * 8; // one quarter note
 // Seconds since the theme's first downbeat, as heard (output latency taken off), or null when it isn't playing.
+// Returns null if the audio clock has stalled (phones can pause it while still reporting "running").
+let lastCT = -1, lastWall = 0;
 export function musicTime() {
-  if (!playing || !ctx) return null;
+  if (!playing || !ctx || ctx.state !== "running" || !soundOn || !musicOn) return null;
+  const now = performance.now();
+  if (ctx.currentTime !== lastCT) { lastCT = ctx.currentTime; lastWall = now; }
+  else if (now - lastWall > 150) return null;
   return ctx.currentTime - startT - (ctx.outputLatency || ctx.baseLatency || 0);
 }
 
