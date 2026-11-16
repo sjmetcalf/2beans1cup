@@ -9,6 +9,7 @@ import { Bar } from "./pages/Bar.jsx";
 import { Barista } from "./pages/Barista.jsx";
 import { FreeTime } from "./pages/FreeTime.jsx";
 import { Drift } from "./pages/Drift.jsx";
+import { autoSyncGarmin } from "./api.js";
 
 const NAV = [
   { to: "/", label: "Cafe", short: "Cafe" },
@@ -102,6 +103,13 @@ function Nav({ route }) {
 
 export function App() {
   const [route] = useHashRoute();
+  // Garmin syncs on its own: hourly on the server, plus whenever the site is opened or brought back to the front
+  useEffect(() => {
+    autoSyncGarmin();
+    const onVis = () => { if (document.visibilityState === "visible") autoSyncGarmin(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   const Page = PAGES[route] || Home;
   return (
     <>

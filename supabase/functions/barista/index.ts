@@ -142,6 +142,26 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "Bad JSON" }, 400); }
   const { code, action } = body ?? {};
+
+  // Automatic Garmin sync: called hourly by a pg_cron job and when someone opens the site.
+  // No code needed: it only refreshes people who already connected Garmin, returns counts only,
+  // and skips anyone synced in the last 30 minutes, so it can't be used to hammer Garmin.
+  if (action === "garmin.auto") {
+    const cutoff = new Date(Date.now() - 30 * 60e3).toISOString();
+    const { data: people } = await db.from("people").select("id,slug,garmin_last_sync").eq("garmin_connected", true);
+    const due = (people ?? []).filter((p: any) => !p.garmin_last_sync || p.garmin_last_sync < cutoff);
+    const synced: Record<string, number | string> = {};
+    for (const p of due) {
+      try { synced[p.slug] = await syncGarmin(p.id); }
+      catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        synced[p.slug] = "error";
+        await db.from("people").update({ garmin_last_error: message.slice(0, 500) }).eq("id", p.id);
+      }
+    }
+    return json({ ok: true, synced });
+  }
+
   if (typeof code !== "string" || !safeEqual(code, secret)) return json({ error: "Wrong barista code." }, 401);
 
   try {

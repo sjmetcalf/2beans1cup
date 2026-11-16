@@ -63,3 +63,19 @@ export const loadActivities = (sinceIso) =>
       `select=id,person_id,sport,activity_type,name,start_time,start_time_local,distance_m,duration_s,elevation_gain_m,avg_hr,max_hr,training_load,aerobic_te,hr_zones_s&order=start_time.desc&limit=1000${sinceIso ? `&start_time=gte.${encodeURIComponent(sinceIso)}` : ""}`,
     ),
   );
+
+// Automatic Garmin sync: if anyone's last sync is over an hour old, ask the server to refresh
+// (it skips anyone synced in the last 30 minutes), then reload the pages' data.
+let autoBusy = false, autoLast = 0;
+export async function autoSyncGarmin() {
+  if (autoBusy || Date.now() - autoLast < 5 * 60e3) return;
+  autoBusy = true; autoLast = Date.now();
+  try {
+    const people = await loadPeople();
+    const stale = people.some((p) => p.garmin_connected && (!p.garmin_last_sync || Date.now() - new Date(p.garmin_last_sync).getTime() > 60 * 60e3));
+    if (!stale) return;
+    const res = await barista("garmin.auto", {}, "");
+    if (Object.values(res.synced || {}).length) invalidate();
+  } catch { /* quiet: the hourly server job will catch up */ }
+  finally { autoBusy = false; }
+}

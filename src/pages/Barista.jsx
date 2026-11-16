@@ -71,10 +71,10 @@ function PersonCard({ person }) {
         {person.garmin_connected ? (
           <>
             <p className="muted small">
-              Connected{person.garmin_last_sync ? ` · last synced ${new Date(person.garmin_last_sync).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
+              Connected · syncs automatically every hour{person.garmin_last_sync ? ` · last synced ${new Date(person.garmin_last_sync).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
             </p>
             <div className="btn-row">
-              <button className="btn btn-dark btn-sm" onClick={sync} disabled={!!busy}>{busy === "sync" ? "Syncing…" : "Sync now"}</button>
+              <button className="btn btn-ghost btn-sm" onClick={sync} disabled={!!busy}>{busy === "sync" ? "Syncing…" : "Sync now"}</button>
               <button className="btn btn-ghost btn-sm" onClick={disconnect} disabled={!!busy}>Disconnect</button>
             </div>
           </>
